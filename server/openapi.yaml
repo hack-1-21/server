@@ -1,0 +1,477 @@
+openapi: 3.0.3
+info:
+  title: SoundReal API
+  version: 1.0.0
+  description: |
+    街の環境音（dB）と位置情報を収集・共有する感覚同期型SNSマップ **SoundReal** のバックエンドAPI。
+    
+    - WearOS デバイスが計測した dB / Hz / 位置情報を保存する
+    - React Native アプリがヒートマップ描画用にデータを取得する
+    - Sound Check-In（BeReal 風）とエリアマスター機能を提供する
+
+servers:
+  - url: http://localhost:8080
+    description: ローカル開発サーバー
+
+tags:
+  - name: health
+    description: サーバー疎通確認
+  - name: measurements
+    description: 環境音測定データの登録・取得
+  - name: checkins
+    description: Sound Check-In（SNSフィード）
+  - name: areas
+    description: エリアマスター
+
+paths:
+  /health:
+    get:
+      summary: ヘルスチェック
+      tags: [health]
+      operationId: getHealth
+      responses:
+        "200":
+          description: サーバー正常稼働
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /measurements:
+    post:
+      summary: 音データ投稿
+      description: WearOS デバイスから dB・Hz・位置情報を受け取り保存する。
+      tags: [measurements]
+      operationId: createMeasurement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMeasurementRequest"
+            example:
+              user_id: "user-abc123"
+              db: 65.5
+              hz: 440.0
+              latitude: 35.6812
+              longitude: 139.7671
+      responses:
+        "201":
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    get:
+      summary: 測定データ一覧（最新100件）
+      tags: [measurements]
+      operationId: getMeasurements
+      responses:
+        "200":
+          description: 測定データ一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Measurement"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /measurements/latest:
+    get:
+      summary: 最新の測定データ（1件）
+      description: リアルタイム表示用。最も新しい1件を返す。
+      tags: [measurements]
+      operationId: getLatestMeasurement
+      responses:
+        "200":
+          description: 最新測定データ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Measurement"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /measurements/area:
+    get:
+      summary: エリア内測定データ（ヒートマップ用）
+      description: |
+        指定した緯度経度を中心とした半径 N km 圏内の測定値を集計して返す。
+        同一座標の測定値は平均 dB とカウントに集約されるため、
+        React Native 側でそのままヒートマップのウェイトとして利用できる。
+      tags: [measurements]
+      operationId: getMeasurementsArea
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          description: 中心緯度（-90〜90）
+          schema:
+            type: number
+            format: double
+            example: 35.6812
+        - name: lng
+          in: query
+          required: true
+          description: 中心経度（-180〜180）
+          schema:
+            type: number
+            format: double
+            example: 139.7671
+        - name: radius
+          in: query
+          required: false
+          description: 検索半径（km）。デフォルト 1.0、最大 50.0
+          schema:
+            type: number
+            format: double
+            default: 1.0
+            example: 0.5
+      responses:
+        "200":
+          description: ヒートマップポイント一覧
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AreaResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /checkins:
+    post:
+      summary: Sound Check-In 投稿
+      description: |
+        BeReal 風の「今のリアル」を音でシェアする。
+        user_id ごとに1日1回の制限はアプリ側で管理する想定。
+      tags: [checkins]
+      operationId: createCheckIn
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCheckInRequest"
+            example:
+              user_id: "user-abc123"
+              latitude: 35.6812
+              longitude: 139.7671
+              db: 72.0
+              message: "渋谷スクランブル！すごい人混み"
+      responses:
+        "201":
+          description: 投稿成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    get:
+      summary: チェックイン一覧（SNSフィード）
+      description: 最新50件のチェックインを新しい順に返す。
+      tags: [checkins]
+      operationId: getCheckIns
+      responses:
+        "200":
+          description: チェックイン一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CheckIn"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /areas/{radius_km}/master:
+    get:
+      summary: エリアマスター取得
+      description: |
+        指定エリア内で最もチェックイン数が多いユーザーを
+        「エリアマスター（守護者）」として返す。
+      tags: [areas]
+      operationId: getAreaMaster
+      parameters:
+        - name: radius_km
+          in: path
+          required: true
+          description: エリア半径（km）。最大 50
+          schema:
+            type: number
+            format: double
+            example: 0.5
+        - name: lat
+          in: query
+          required: true
+          description: 中心緯度
+          schema:
+            type: number
+            format: double
+            example: 35.6812
+        - name: lng
+          in: query
+          required: true
+          description: 中心経度
+          schema:
+            type: number
+            format: double
+            example: 139.7671
+      responses:
+        "200":
+          description: エリアマスター情報
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AreaMaster"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  schemas:
+    Measurement:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: string
+          example: "user-abc123"
+        db:
+          type: number
+          format: double
+          description: 音量（デシベル）
+          example: 65.5
+        hz:
+          type: number
+          format: double
+          description: 周波数（ヘルツ）
+          example: 440.0
+        latitude:
+          type: number
+          format: double
+          example: 35.6812
+        longitude:
+          type: number
+          format: double
+          example: 139.7671
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-04-28T09:00:00Z"
+
+    CreateMeasurementRequest:
+      type: object
+      required: [db, hz, latitude, longitude]
+      properties:
+        user_id:
+          type: string
+          example: "user-abc123"
+        db:
+          type: number
+          format: double
+          example: 65.5
+        hz:
+          type: number
+          format: double
+          example: 440.0
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          example: 35.6812
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          example: 139.7671
+
+    CheckIn:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: string
+          example: "user-abc123"
+        latitude:
+          type: number
+          format: double
+          example: 35.6812
+        longitude:
+          type: number
+          format: double
+          example: 139.7671
+        db:
+          type: number
+          format: double
+          example: 72.0
+        message:
+          type: string
+          example: "渋谷スクランブル！すごい人混み"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-04-28T09:00:00Z"
+
+    CreateCheckInRequest:
+      type: object
+      required: [user_id, latitude, longitude, db]
+      properties:
+        user_id:
+          type: string
+          example: "user-abc123"
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          example: 35.6812
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          example: 139.7671
+        db:
+          type: number
+          format: double
+          example: 72.0
+        message:
+          type: string
+          maxLength: 280
+          example: "渋谷スクランブル！すごい人混み"
+
+    HeatmapPoint:
+      type: object
+      properties:
+        latitude:
+          type: number
+          format: double
+          example: 35.6812
+        longitude:
+          type: number
+          format: double
+          example: 139.7671
+        avg_db:
+          type: number
+          format: double
+          description: エリア内の平均 dB
+          example: 68.3
+        count:
+          type: integer
+          description: 同座標の測定件数
+          example: 5
+
+    AreaResponse:
+      type: object
+      properties:
+        center:
+          type: object
+          properties:
+            lat:
+              type: number
+              format: double
+              example: 35.6812
+            lng:
+              type: number
+              format: double
+              example: 139.7671
+        radius_km:
+          type: number
+          format: double
+          example: 1.0
+        count:
+          type: integer
+          description: 返却ポイント数
+          example: 42
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/HeatmapPoint"
+
+    AreaMaster:
+      type: object
+      properties:
+        user_id:
+          type: string
+          description: エリアマスターのユーザーID
+          example: "user-abc123"
+        checkins:
+          type: integer
+          description: エリア内のチェックイン数
+          example: 15
+        center_lat:
+          type: number
+          format: double
+          example: 35.6812
+        center_lng:
+          type: number
+          format: double
+          example: 139.7671
+        radius_km:
+          type: number
+          format: double
+          example: 0.5
+
+    CreatedResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        message:
+          type: string
+          example: ok
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "リクエストのJSON形式が不正です"
+
+  responses:
+    BadRequest:
+      description: リクエストパラメータが不正
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: データが存在しない
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: サーバー内部エラー
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
