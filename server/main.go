@@ -5,6 +5,7 @@ import (
 	"hack1-server/handlers"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
@@ -40,8 +41,11 @@ func main() {
 		AllowedHeaders: []string{"Content-Type"},
 	})
 	handler := c.Handler(r)
-
-	addr := ":8080"
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	addr := ":" + port
 	log.Printf("サーバー起動: http://localhost%s", addr)
 	log.Printf("エンドポイント一覧:")
 	log.Printf("  GET    /health")

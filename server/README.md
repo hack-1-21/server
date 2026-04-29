@@ -34,7 +34,7 @@ server/
     └── measurement.go   # 全構造体定義
 ```
 
-## セットアップ
+## ローカル開発環境セットアップ
 
 ### 前提条件
 
@@ -64,6 +64,35 @@ docker compose up --build
 |--------|-----------|------|
 | `DATABASE_URL` | `postgres://soundreal:soundreal@postgres:5432/soundreal?sslmode=disable` | PostgreSQL 接続文字列 |
 
+---
+
+## 本番環境デプロイ（Railway）
+
+本プロジェクトは [Railway](https://railway.app) にデプロイされています。
+`main` ブランチへの `git push` で自動的に再デプロイされます。
+
+### 本番URL
+
+```
+https://server-production-5adf.up.railway.app
+```
+
+### 初回デプロイ手順（参考）
+
+1. [railway.app](https://railway.app) にGitHubアカウントでログイン
+2. 「New Project」→「Database」→「PostgreSQL」でDB作成
+3. 「Add Service」→「GitHub Repository」でこのリポジトリを選択
+4. Settingsの「Root Directory」に `server` を設定（重要）
+5. Variablesタブで環境変数を追加：
+   ```
+   DATABASE_URL = ${{Postgres.DATABASE_URL}}
+   ```
+6. Settings → Networking → 「Generate Domain」でURLを発行
+
+> **マイグレーションについて:** サーバー起動時に `db.Init()` が自動でテーブルを作成するため、手動マイグレーションは不要。
+
+---
+
 ## API エンドポイント
 
 | Method | Path | 説明 |
@@ -79,7 +108,11 @@ docker compose up --build
 
 詳細は `openapi.yaml` を参照。
 
-## 動作確認（curl）
+---
+
+## 動作確認
+
+### macOS / Linux / Git Bash (Windows)
 
 ```bash
 # ヘルスチェック
@@ -113,6 +146,34 @@ curl -X POST http://localhost:8080/checkins \
 # エリアマスター取得（渋谷周辺 500m）
 curl "http://localhost:8080/areas/0.5/master?lat=35.6812&lng=139.7671"
 ```
+
+### Windows (PowerShell)
+
+> **注意:** PowerShell では `curl` が別コマンドのエイリアスになっているため、`Invoke-RestMethod` を使うこと。
+> または **Git Bash** を使えば上記の curl コマンドがそのまま動く（推奨）。
+
+```powershell
+# ヘルスチェック
+Invoke-RestMethod -Uri "http://localhost:8080/health"
+
+# 音データ投稿
+Invoke-RestMethod -Method POST -Uri "http://localhost:8080/measurements" `
+  -ContentType "application/json" `
+  -Body '{"user_id":"user-001","db":65.5,"hz":440.0,"latitude":35.6812,"longitude":139.7671}'
+
+# ヒートマップ用エリア検索（渋谷周辺 1km）
+Invoke-RestMethod -Uri "http://localhost:8080/measurements/area?lat=35.6812&lng=139.7671&radius=1.0"
+
+# Sound Check-In 投稿
+Invoke-RestMethod -Method POST -Uri "http://localhost:8080/checkins" `
+  -ContentType "application/json" `
+  -Body '{"user_id":"user-001","latitude":35.6812,"longitude":139.7671,"db":72.0,"message":"渋谷スクランブル交差点！"}'
+
+# エリアマスター取得（渋谷周辺 500m）
+Invoke-RestMethod -Uri "http://localhost:8080/areas/0.5/master?lat=35.6812&lng=139.7671"
+```
+
+---
 
 ## API 仕様書の閲覧
 
