@@ -112,10 +112,17 @@ https://server-production-5adf.up.railway.app
 
 ### 1. ユーザー登録とログイン
 このAPIはJWT (JSON Web Token) を用いた認証の基礎を提供しています。
-- **新規登録 (`/auth/register`)**: `user_id`, `nickname`, `password` を送信すると、ユーザーが作成され JWT `token` が返却されます。
-- **ログイン (`/auth/login`)**: `user_id`, `password` を送信すると、検証のうえ JWT `token` が返却されます。
 
-（※ ハッカソン用途のため、現状では各エンドポイントでのJWTの厳密な検証ミドルウェアは省略していますが、フロントエンド側でトークンを保持してヘッダに付与するなどのフローを実装可能です。）
+**【推奨】Googleログイン (フロントエンド連携)**
+- **Googleログイン (`/auth/google`)**:
+  フロントエンド(React Native/Expo等)で取得したGoogleの `id_token` をサーバーに送信すると、サーバー側で検証し、独自JWT `token` とユーザー情報を返却します。
+  ※これが最も簡単で安全な実装方法です。
+
+**【任意】ID/パスワード形式**
+- **新規登録 (`/auth/register`)**: `user_id`, `nickname`, `password` を送信して作成。
+- **ログイン (`/auth/login`)**: `user_id`, `password` で検証。
+
+（※ ハッカソン用途のため、現状では各エンドポイントでのJWTの厳密な検証ミドルウェアは省略していますが、フロントエンド側で取得した `token` を保持しておいてください。）
 
 #### 動作確認 (QAテスト): ユーザー登録とログイン
 環境に合わせて、ローカルか本番(Production)のURLを選択して実行してください。
@@ -144,6 +151,19 @@ curl -X POST http://localhost:8080/auth/login \
 curl -X POST https://server-production-5adf.up.railway.app/auth/login \
   -H "Content-Type: application/json" \
   -d '{"user_id": "user-001", "password": "password123"}'
+
+
+# ----- Google ログイン -----
+# フロントエンドから取得した実際の id_token を入れてテストしてください
+# [Local]
+curl -X POST http://localhost:8080/auth/google \
+  -H "Content-Type: application/json" \
+  -d '{"id_token": "YOUR_GOOGLE_ID_TOKEN_HERE"}'
+
+# [Production]
+curl -X POST https://server-production-5adf.up.railway.app/auth/google \
+  -H "Content-Type: application/json" \
+  -d '{"id_token": "YOUR_GOOGLE_ID_TOKEN_HERE"}'
 ```
 
 ### 2. ゲストユーザーの扱い

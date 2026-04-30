@@ -26,6 +26,7 @@ func main() {
 	// ---- 認証 ----
 	r.HandleFunc("/auth/register", handlers.Register).Methods("POST")
 	r.HandleFunc("/auth/login", handlers.Login).Methods("POST")
+	r.HandleFunc("/auth/google", handlers.GoogleLogin).Methods("POST")
 
 	// ---- ユーザー ----
 	r.HandleFunc("/users/{user_id}", handlers.GetUser).Methods("GET")

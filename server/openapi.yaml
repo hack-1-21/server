@@ -101,6 +101,38 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /auth/google:
+    post:
+      summary: Googleログイン
+      description: |
+        フロントエンド（React Native/Expo）で取得したGoogleの `id_token` を送信して認証する。
+        検証に成功すれば、独自JWTトークンとユーザー情報を返す。
+      tags: [auth]
+      operationId: googleLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleLoginRequest"
+      responses:
+        "200":
+          description: ログイン/登録成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: 無効な Google トークン
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /users/{user_id}:
     get:
       summary: ユーザー情報取得
@@ -333,6 +365,15 @@ components:
         password:
           type: string
           example: "secretpassword"
+
+    GoogleLoginRequest:
+      type: object
+      required: [id_token]
+      properties:
+        id_token:
+          type: string
+          description: Googleログインで取得したIDトークン
+          example: "eyJhbGciOiJSUzI1NiIsImtpZCI6..."
 
     AuthResponse:
       type: object

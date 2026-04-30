@@ -34,6 +34,11 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+// GoogleLoginRequest は POST /auth/google のリクエストボディ
+type GoogleLoginRequest struct {
+	IDToken string `json:"id_token"`
+}
+
 // AuthResponse はログイン・登録成功時のレスポンス
 type AuthResponse struct {
 	Token string `json:"token"`
