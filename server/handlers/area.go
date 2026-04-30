@@ -49,6 +49,8 @@ func GetMeasurementsArea(w http.ResponseWriter, r *http.Request) {
 		radius = 50 // DoS 対策: 最大50km
 	}
 
+	userID := q.Get("user_id")
+
 	// 1度あたり ≒ 111.32 km でバウンディングボックスを計算
 	degPerKm := 1.0 / 111.32
 	latDelta := radius * degPerKm
@@ -75,15 +77,22 @@ func GetMeasurementsArea(w http.ResponseWriter, r *http.Request) {
 					)
 				)
 			) <= $7
-		GROUP BY latitude, longitude
-		LIMIT 500
 	`
 
-	rows, err := db.DB.Query(query,
-		lat-latDelta, lat+latDelta,
-		lng-lngDelta, lng+lngDelta,
+	args := []interface{}{
+		lat - latDelta, lat + latDelta,
+		lng - lngDelta, lng + lngDelta,
 		lat, lng, radius,
-	)
+	}
+
+	if userID != "" {
+		query += ` AND user_id = $8`
+		args = append(args, userID)
+	}
+
+	query += ` GROUP BY latitude, longitude LIMIT 500`
+
+	rows, err := db.DB.Query(query, args...)
 	if err != nil {
 		log.Printf("エリア検索失敗: %v", err)
 		respondError(w, http.StatusInternalServerError, "データ取得に失敗しました")

@@ -22,6 +22,8 @@ tags:
     description: Sound Check-In（SNSフィード）
   - name: areas
     description: エリアマスター
+  - name: users
+    description: ユーザープロフィールと設定
 
 paths:
   /health:
@@ -40,6 +42,66 @@ paths:
                   status:
                     type: string
                     example: ok
+
+  /users/{user_id}:
+    get:
+      summary: ユーザー情報取得
+      description: ユーザーのプロフィールと設定を取得する（存在しない場合は自動作成）。
+      tags: [users]
+      operationId: getUser
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: ユーザーID
+          schema:
+            type: string
+            example: "user-abc123"
+      responses:
+        "200":
+          description: ユーザー情報
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      summary: ユーザー情報更新
+      description: ユーザーのプロフィールや設定を更新する。
+      tags: [users]
+      operationId: updateUser
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: ユーザーID
+          schema:
+            type: string
+            example: "user-abc123"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+            example:
+              nickname: "SoundMaster"
+              alert_enabled: false
+              theme: "dark"
+      responses:
+        "200":
+          description: 更新後のユーザー情報
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /measurements:
     post:
@@ -140,6 +202,13 @@ paths:
             format: double
             default: 1.0
             example: 0.5
+        - name: user_id
+          in: query
+          required: false
+          description: 指定するとそのユーザーのデータのみに絞り込む（自分の集めたデータのみ表示する場合などに使用）
+          schema:
+            type: string
+            example: "user-abc123"
       responses:
         "200":
           description: ヒートマップポイント一覧
@@ -250,6 +319,47 @@ paths:
 
 components:
   schemas:
+    User:
+      type: object
+      properties:
+        user_id:
+          type: string
+          example: "user-abc123"
+        nickname:
+          type: string
+          example: "SoundMaster"
+        level:
+          type: integer
+          example: 5
+        exp:
+          type: integer
+          example: 1250
+        points:
+          type: integer
+          example: 300
+        alert_enabled:
+          type: boolean
+          example: true
+        theme:
+          type: string
+          example: "light"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-04-28T09:00:00Z"
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        nickname:
+          type: string
+          example: "SoundMaster"
+        alert_enabled:
+          type: boolean
+          example: false
+        theme:
+          type: string
+          example: "dark"
     Measurement:
       type: object
       properties:

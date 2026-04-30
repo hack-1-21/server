@@ -34,6 +34,16 @@ func Init() {
 
 func migrate() {
 	queries := []string{
+		`CREATE TABLE IF NOT EXISTS users (
+			user_id    TEXT PRIMARY KEY,
+			nickname   TEXT NOT NULL DEFAULT '',
+			level      INTEGER NOT NULL DEFAULT 1,
+			exp        INTEGER NOT NULL DEFAULT 0,
+			points     INTEGER NOT NULL DEFAULT 0,
+			alert_enabled BOOLEAN NOT NULL DEFAULT true,
+			theme      TEXT NOT NULL DEFAULT 'light',
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		)`,
 		`CREATE TABLE IF NOT EXISTS measurements (
 			id         SERIAL PRIMARY KEY,
 			user_id    TEXT    NOT NULL DEFAULT '',

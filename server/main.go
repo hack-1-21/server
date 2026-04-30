@@ -20,6 +20,10 @@ func main() {
 	// ---- ヘルスチェック ----
 	r.HandleFunc("/health", handlers.HealthCheck).Methods("GET")
 
+	// ---- ユーザー ----
+	r.HandleFunc("/users/{user_id}", handlers.GetUser).Methods("GET")
+	r.HandleFunc("/users/{user_id}", handlers.UpdateUser).Methods("PUT")
+
 	// ---- 測定データ ----
 	r.HandleFunc("/measurements", handlers.CreateMeasurement).Methods("POST")
 	r.HandleFunc("/measurements", handlers.GetMeasurements).Methods("GET")
