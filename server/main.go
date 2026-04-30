@@ -20,6 +20,9 @@ func main() {
 	// ---- ヘルスチェック ----
 	r.HandleFunc("/health", handlers.HealthCheck).Methods("GET")
 
+	// ---- デバッグ・開発用 ----
+	r.HandleFunc("/debug/reset", handlers.ResetDatabase).Methods("DELETE")
+
 	// ---- 認証 ----
 	r.HandleFunc("/auth/register", handlers.Register).Methods("POST")
 	r.HandleFunc("/auth/login", handlers.Login).Methods("POST")

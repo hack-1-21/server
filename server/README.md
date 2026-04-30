@@ -194,6 +194,22 @@ curl "http://localhost:8080/measurements/bbox?ne_lat=35.690&ne_lng=139.770&sw_la
 
 ---
 
+## 開発・デバッグ用ツール
+
+### データベースの全リセット (初期化)
+ハッカソンのデモ前や、古いダミーデータでおかしくなった場合に、**データベースのすべてのユーザーと測定データを完全に消去**するAPIです。
+
+```bash
+# [Local]
+curl -X DELETE http://localhost:8080/debug/reset
+
+# [Production]
+# curl -X DELETE https://server-production-5adf.up.railway.app/debug/reset
+```
+※ 実行すると `users` と `measurements` テーブルが空になり、最初のクリーンな状態に戻ります。
+
+---
+
 ## API 仕様書の閲覧
 
 `openapi.yaml` を [Swagger Editor](https://editor.swagger.io/) または VS Code の OpenAPI 拡張で開くと、
