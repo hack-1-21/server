@@ -36,6 +36,7 @@ func migrate() {
 	queries := []string{
 		`CREATE TABLE IF NOT EXISTS users (
 			user_id    TEXT PRIMARY KEY,
+			password_hash TEXT NOT NULL DEFAULT '',
 			nickname   TEXT NOT NULL DEFAULT '',
 			level      INTEGER NOT NULL DEFAULT 1,
 			exp        INTEGER NOT NULL DEFAULT 0,

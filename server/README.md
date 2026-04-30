@@ -98,13 +98,13 @@ https://server-production-5adf.up.railway.app
 | Method | Path | 説明 |
 |--------|------|------|
 | `GET` | `/health` | ヘルスチェック |
-| `POST` | `/measurements` | 音データ投稿（WearOS から） |
-| `GET` | `/measurements` | 最新100件取得 |
-| `GET` | `/measurements/latest` | 最新1件取得 |
-| `GET` | `/measurements/area` | ヒートマップ用エリア検索 |
-| `POST` | `/checkins` | Sound Check-In 投稿 |
-| `GET` | `/checkins` | SNS フィード（最新50件） |
-| `GET` | `/areas/{radius_km}/master` | エリアマスター取得 |
+| `POST` | `/auth/register` | 新規ユーザー登録 (JWT トークン発行) |
+| `POST` | `/auth/login` | ログイン (JWT トークン発行) |
+| `GET` | `/users/{user_id}` | ユーザープロフィール取得 |
+| `PUT` | `/users/{user_id}` | ユーザープロフィール・設定更新 |
+| `POST` | `/measurements` | 音データ投稿（WearOS から）。経験値・レベルアップ処理含む |
+| `GET` | `/measurements` | 全件または差分取得 (`?after_id=`) |
+| `GET` | `/measurements/bbox` | マップ用：表示範囲内の測定データ取得 (`?ne_lat=&ne_lng=&sw_lat=&sw_lng=&user_id=`) |
 
 詳細は `openapi.yaml` を参照。
 
@@ -118,6 +118,23 @@ https://server-production-5adf.up.railway.app
 # ヘルスチェック
 curl http://localhost:8080/health
 
+# 新規登録
+curl -X POST http://localhost:8080/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user-001",
+    "nickname": "TestUser",
+    "password": "password123"
+  }'
+
+# ログイン (JWT取得)
+curl -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user-001",
+    "password": "password123"
+  }'
+
 # 音データ投稿（WearOS 送信をエミュレート）
 curl -X POST http://localhost:8080/measurements \
   -H "Content-Type: application/json" \
@@ -129,22 +146,12 @@ curl -X POST http://localhost:8080/measurements \
     "longitude": 139.7671
   }'
 
-# ヒートマップ用エリア検索（渋谷周辺 1km）
-curl "http://localhost:8080/measurements/area?lat=35.6812&lng=139.7671&radius=1.0"
+# マップ用データ取得（渋谷周辺のバウンディングボックス）
+# ne_lat/ne_lng: 北東、sw_lat/sw_lng: 南西
+curl "http://localhost:8080/measurements/bbox?ne_lat=35.685&ne_lng=139.770&sw_lat=35.670&sw_lng=139.750"
 
-# Sound Check-In 投稿
-curl -X POST http://localhost:8080/checkins \
-  -H "Content-Type: application/json" \
-  -d '{
-    "user_id": "user-001",
-    "latitude": 35.6812,
-    "longitude": 139.7671,
-    "db": 72.0,
-    "message": "渋谷スクランブル交差点！"
-  }'
-
-# エリアマスター取得（渋谷周辺 500m）
-curl "http://localhost:8080/areas/0.5/master?lat=35.6812&lng=139.7671"
+# 自分のデータのみマップで表示する場合
+curl "http://localhost:8080/measurements/bbox?ne_lat=35.685&ne_lng=139.770&sw_lat=35.670&sw_lng=139.750&user_id=user-001"
 ```
 
 ### Windows (PowerShell)
@@ -153,24 +160,13 @@ curl "http://localhost:8080/areas/0.5/master?lat=35.6812&lng=139.7671"
 > または **Git Bash** を使えば上記の curl コマンドがそのまま動く（推奨）。
 
 ```powershell
-# ヘルスチェック
-Invoke-RestMethod -Uri "http://localhost:8080/health"
-
-# 音データ投稿
-Invoke-RestMethod -Method POST -Uri "http://localhost:8080/measurements" `
+# 新規登録
+Invoke-RestMethod -Method POST -Uri "http://localhost:8080/auth/register" `
   -ContentType "application/json" `
-  -Body '{"user_id":"user-001","db":65.5,"hz":440.0,"latitude":35.6812,"longitude":139.7671}'
+  -Body '{"user_id":"user-001","nickname":"TestUser","password":"password123"}'
 
-# ヒートマップ用エリア検索（渋谷周辺 1km）
-Invoke-RestMethod -Uri "http://localhost:8080/measurements/area?lat=35.6812&lng=139.7671&radius=1.0"
-
-# Sound Check-In 投稿
-Invoke-RestMethod -Method POST -Uri "http://localhost:8080/checkins" `
-  -ContentType "application/json" `
-  -Body '{"user_id":"user-001","latitude":35.6812,"longitude":139.7671,"db":72.0,"message":"渋谷スクランブル交差点！"}'
-
-# エリアマスター取得（渋谷周辺 500m）
-Invoke-RestMethod -Uri "http://localhost:8080/areas/0.5/master?lat=35.6812&lng=139.7671"
+# マップ用データ取得
+Invoke-RestMethod -Uri "http://localhost:8080/measurements/bbox?ne_lat=35.685&ne_lng=139.770&sw_lat=35.670&sw_lng=139.750"
 ```
 
 ---

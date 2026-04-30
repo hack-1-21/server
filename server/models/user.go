@@ -20,3 +20,22 @@ type UpdateUserRequest struct {
 	AlertEnabled *bool   `json:"alert_enabled,omitempty"`
 	Theme        *string `json:"theme,omitempty"`
 }
+
+// RegisterRequest は POST /auth/register のリクエストボディ
+type RegisterRequest struct {
+	UserID   string `json:"user_id"`
+	Nickname string `json:"nickname"`
+	Password string `json:"password"`
+}
+
+// LoginRequest は POST /auth/login のリクエストボディ
+type LoginRequest struct {
+	UserID   string `json:"user_id"`
+	Password string `json:"password"`
+}
+
+// AuthResponse はログイン・登録成功時のレスポンス
+type AuthResponse struct {
+	Token string `json:"token"`
+	User  User   `json:"user"`
+}

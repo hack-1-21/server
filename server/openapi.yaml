@@ -18,6 +18,8 @@ tags:
     description: サーバー疎通確認
   - name: measurements
     description: 環境音測定データの登録・取得
+  - name: auth
+    description: ユーザー認証（JWT）
   - name: users
     description: ユーザープロフィールと設定
 
@@ -38,6 +40,66 @@ paths:
                   status:
                     type: string
                     example: ok
+
+  /auth/register:
+    post:
+      summary: 新規登録
+      description: ユーザーIDとパスワードでアカウントを作成し、JWTトークンを返す。
+      tags: [auth]
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: 登録成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: ユーザーIDが既に存在する
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /auth/login:
+    post:
+      summary: ログイン
+      description: ユーザーIDとパスワードでログインし、JWTトークンを返す。
+      tags: [auth]
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: ログイン成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: 認証失敗（IDまたはパスワード間違い）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /users/{user_id}:
     get:
@@ -154,41 +216,47 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
-  /measurements/area:
+  /measurements/bbox:
     get:
-      summary: エリア内測定データ（ヒートマップ用）
+      summary: バウンディングボックス内の測定データ
       description: |
-        指定した緯度経度を中心とした半径 N km 圏内の測定値を集計して返す。
-        同一座標の測定値は平均 dB とカウントに集約されるため、
-        React Native 側でそのままヒートマップのウェイトとして利用できる。
+        指定した北東（NE）と南西（SW）の座標内に含まれるすべての測定データを返す。
+        ユーザーIDを指定すると、そのユーザーのデータのみに絞り込むことができる。
       tags: [measurements]
-      operationId: getMeasurementsArea
+      operationId: getMeasurementsBBox
       parameters:
-        - name: lat
+        - name: ne_lat
           in: query
           required: true
-          description: 中心緯度（-90〜90）
+          description: 北東の緯度
           schema:
             type: number
             format: double
             example: 35.6812
-        - name: lng
+        - name: ne_lng
           in: query
           required: true
-          description: 中心経度（-180〜180）
+          description: 北東の経度
           schema:
             type: number
             format: double
             example: 139.7671
-        - name: radius
+        - name: sw_lat
           in: query
-          required: false
-          description: 検索半径（km）。デフォルト 1.0、最大 50.0
+          required: true
+          description: 南西の緯度
           schema:
             type: number
             format: double
-            default: 1.0
-            example: 0.5
+            example: 35.6580
+        - name: sw_lng
+          in: query
+          required: true
+          description: 南西の経度
+          schema:
+            type: number
+            format: double
+            example: 139.7016
         - name: user_id
           in: query
           required: false
@@ -198,11 +266,13 @@ paths:
             example: "user-abc123"
       responses:
         "200":
-          description: ヒートマップポイント一覧
+          description: 測定データ一覧
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AreaResponse"
+                type: array
+                items:
+                  $ref: "#/components/schemas/Measurement"
         "400":
           $ref: "#/components/responses/BadRequest"
         "500":
@@ -238,6 +308,40 @@ components:
           type: string
           format: date-time
           example: "2026-04-28T09:00:00Z"
+
+    RegisterRequest:
+      type: object
+      required: [user_id, nickname, password]
+      properties:
+        user_id:
+          type: string
+          example: "user-abc123"
+        nickname:
+          type: string
+          example: "SoundMaster"
+        password:
+          type: string
+          example: "secretpassword"
+
+    LoginRequest:
+      type: object
+      required: [user_id, password]
+      properties:
+        user_id:
+          type: string
+          example: "user-abc123"
+        password:
+          type: string
+          example: "secretpassword"
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        user:
+          $ref: "#/components/schemas/User"
 
     UpdateUserRequest:
       type: object
@@ -310,54 +414,6 @@ components:
           minimum: -180
           maximum: 180
           example: 139.7671
-
-    HeatmapPoint:
-      type: object
-      properties:
-        latitude:
-          type: number
-          format: double
-          example: 35.6812
-        longitude:
-          type: number
-          format: double
-          example: 139.7671
-        avg_db:
-          type: number
-          format: double
-          description: エリア内の平均 dB
-          example: 68.3
-        count:
-          type: integer
-          description: 同座標の測定件数
-          example: 5
-
-    AreaResponse:
-      type: object
-      properties:
-        center:
-          type: object
-          properties:
-            lat:
-              type: number
-              format: double
-              example: 35.6812
-            lng:
-              type: number
-              format: double
-              example: 139.7671
-        radius_km:
-          type: number
-          format: double
-          example: 1.0
-        count:
-          type: integer
-          description: 返却ポイント数
-          example: 42
-        points:
-          type: array
-          items:
-            $ref: "#/components/schemas/HeatmapPoint"
 
     CreatedResponse:
       type: object

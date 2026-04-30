@@ -25,17 +25,8 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 	).Scan(&u.UserID, &u.Nickname, &u.Level, &u.Exp, &u.Points, &u.AlertEnabled, &u.Theme, &u.CreatedAt)
 
 	if err == sql.ErrNoRows {
-		// ユーザーが存在しない場合、自動的に作成する
-		err = db.DB.QueryRow(
-			`INSERT INTO users (user_id) VALUES ($1)
-			 RETURNING user_id, nickname, level, exp, points, alert_enabled, theme, created_at`,
-			userID,
-		).Scan(&u.UserID, &u.Nickname, &u.Level, &u.Exp, &u.Points, &u.AlertEnabled, &u.Theme, &u.CreatedAt)
-		if err != nil {
-			log.Printf("ユーザー作成失敗: %v", err)
-			respondError(w, http.StatusInternalServerError, "ユーザー作成に失敗しました")
-			return
-		}
+		respondError(w, http.StatusNotFound, "ユーザーが見つかりません")
+		return
 	} else if err != nil {
 		log.Printf("ユーザー取得失敗: %v", err)
 		respondError(w, http.StatusInternalServerError, "ユーザー取得に失敗しました")
