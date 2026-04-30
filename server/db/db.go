@@ -57,7 +57,8 @@ func migrate() {
 		// ヒートマップ用: 位置情報インデックス
 		`CREATE INDEX IF NOT EXISTS idx_measurements_location
 			ON measurements (latitude, longitude)`,
-
+		// 既存テーブルへのカラム追加（安全なアップデート用）
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT NOT NULL DEFAULT ''`,
 	}
 
 	for _, q := range queries {

@@ -204,7 +204,7 @@ curl "http://localhost:8080/measurements/bbox?ne_lat=35.690&ne_lng=139.770&sw_la
 curl -X DELETE http://localhost:8080/debug/reset
 
 # [Production]
-# curl -X DELETE https://server-production-5adf.up.railway.app/debug/reset
+curl -X DELETE https://server-production-5adf.up.railway.app/debug/reset
 ```
 ※ 実行すると `users` と `measurements` テーブルが空になり、最初のクリーンな状態に戻ります。
 
