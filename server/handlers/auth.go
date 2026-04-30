@@ -73,13 +73,19 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	err = db.DB.QueryRow(
 		`INSERT INTO users (user_id, password_hash, nickname, level, exp, points, alert_enabled, theme, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		 ON CONFLICT (user_id) DO UPDATE 
+		 SET password_hash = EXCLUDED.password_hash, nickname = EXCLUDED.nickname
+		 WHERE users.password_hash = '' OR users.password_hash IS NULL
 		 RETURNING user_id`,
 		u.UserID, string(hashedPassword), u.Nickname, u.Level, u.Exp, u.Points, u.AlertEnabled, u.Theme, u.CreatedAt,
 	).Scan(&u.UserID)
 
-	if err != nil {
+	if err == sql.ErrNoRows {
+		respondError(w, http.StatusConflict, "そのユーザーIDは既に登録されています")
+		return
+	} else if err != nil {
 		log.Printf("ユーザー作成エラー: %v", err)
-		respondError(w, http.StatusConflict, "そのユーザーIDは既に存在するか、登録に失敗しました")
+		respondError(w, http.StatusInternalServerError, "登録に失敗しました")
 		return
 	}
 

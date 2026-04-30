@@ -108,65 +108,88 @@ https://server-production-5adf.up.railway.app
 
 詳細は `openapi.yaml` を参照。
 
----
+## 認証とゲスト対応について
 
-## 動作確認
+### 1. ユーザー登録とログイン
+このAPIはJWT (JSON Web Token) を用いた認証の基礎を提供しています。
+- **新規登録 (`/auth/register`)**: `user_id`, `nickname`, `password` を送信すると、ユーザーが作成され JWT `token` が返却されます。
+- **ログイン (`/auth/login`)**: `user_id`, `password` を送信すると、検証のうえ JWT `token` が返却されます。
 
-### macOS / Linux / Git Bash (Windows)
+（※ ハッカソン用途のため、現状では各エンドポイントでのJWTの厳密な検証ミドルウェアは省略していますが、フロントエンド側でトークンを保持してヘッダに付与するなどのフローを実装可能です。）
+
+#### 動作確認 (QAテスト): ユーザー登録とログイン
+環境に合わせて、ローカルか本番(Production)のURLを選択して実行してください。
+※ Windowsの場合は、コマンドプロンプトやPowerShellではなく **Git Bash** を使用するとそのままコピペで実行できます。
 
 ```bash
-# ヘルスチェック
-curl http://localhost:8080/health
-
-# 新規登録
+# ----- 新規登録 -----
+# [Local]
 curl -X POST http://localhost:8080/auth/register \
   -H "Content-Type: application/json" \
-  -d '{
-    "user_id": "user-001",
-    "nickname": "TestUser",
-    "password": "password123"
-  }'
+  -d '{"user_id": "user-001", "nickname": "TestUser", "password": "password123"}'
 
-# ログイン (JWT取得)
+# [Production]
+curl -X POST https://server-production-5adf.up.railway.app/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "user-001", "nickname": "TestUser", "password": "password123"}'
+
+
+# ----- ログイン (JWT取得) -----
+# [Local]
 curl -X POST http://localhost:8080/auth/login \
   -H "Content-Type: application/json" \
-  -d '{
-    "user_id": "user-001",
-    "password": "password123"
-  }'
+  -d '{"user_id": "user-001", "password": "password123"}'
 
-# 音データ投稿（WearOS 送信をエミュレート）
-curl -X POST http://localhost:8080/measurements \
+# [Production]
+curl -X POST https://server-production-5adf.up.railway.app/auth/login \
   -H "Content-Type: application/json" \
-  -d '{
-    "user_id": "user-001",
-    "db": 65.5,
-    "hz": 440.0,
-    "latitude": 35.6812,
-    "longitude": 139.7671
-  }'
-
-# マップ用データ取得（渋谷周辺のバウンディングボックス）
-# ne_lat/ne_lng: 北東、sw_lat/sw_lng: 南西
-curl "http://localhost:8080/measurements/bbox?ne_lat=35.685&ne_lng=139.770&sw_lat=35.670&sw_lng=139.750"
-
-# 自分のデータのみマップで表示する場合
-curl "http://localhost:8080/measurements/bbox?ne_lat=35.685&ne_lng=139.770&sw_lat=35.670&sw_lng=139.750&user_id=user-001"
+  -d '{"user_id": "user-001", "password": "password123"}'
 ```
 
-### Windows (PowerShell)
+### 2. ゲストユーザーの扱い
+ハッカソンのデモ等で一時的な「ゲスト」としてアプリに入る場合、**バックエンド側に専用のアカウントを作成する必要はありません**。
+- `/measurements/bbox` などのデータ取得APIは誰でも（トークン無しでも）アクセス可能です。
+- ゲストは `user_id` を持たないため、「他人が取った音のマップ」は閲覧できますが、「自分の取った音のマップ」の取得条件 (`&user_id=...` の指定) は利用できない、という形で自然にアクセス制限が実現されます。
 
-> **注意:** PowerShell では `curl` が別コマンドのエイリアスになっているため、`Invoke-RestMethod` を使うこと。
-> または **Git Bash** を使えば上記の curl コマンドがそのまま動く（推奨）。
+---
 
-```powershell
-# 新規登録
-Invoke-RestMethod -Method POST -Uri "http://localhost:8080/auth/register" `
-  -ContentType "application/json" `
-  -Body '{"user_id":"user-001","nickname":"TestUser","password":"password123"}'
+## 測定データとマップの取得について
 
-# マップ用データ取得
-Invoke-RestMethod -Uri "http://localhost:8080/measurements/bbox?ne_lat=35.685&ne_lng=139.770&sw_lat=35.670&sw_lng=139.750"
+### 1. 音データの投稿 (WearOSからの送信)
+WearOSデバイス等から音データを送信すると、DBに保存されると同時に、ユーザーに経験値が付与されレベルアップの判定が行われます。
+
+#### 動作確認 (QAテスト): 音データ投稿
+```bash
+# [Local]
+curl -X POST http://localhost:8080/measurements \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "user-001", "db": 65.5, "hz": 440.0, "latitude": 35.6812, "longitude": 139.7671}'
+
+# [Production]
+# curl -X POST https://server-production-5adf.up.railway.app/measurements \
+#   -H "Content-Type: application/json" \
+#   -d '{"user_id": "user-001", "db": 65.5, "hz": 440.0, "latitude": 35.6812, "longitude": 139.7671}'
+```
+
+### 2. マップ用データ取得 (バウンディングボックス)
+マップ画面の表示範囲（北東と南西の緯度経度）を指定して、そこに含まれるすべてのデータを取得します。
+
+#### 動作確認 (QAテスト): マップ用データ取得
+```bash
+# ----- 全員のデータ（他者のデータ）を取得 -----
+# [Local]
+curl "http://localhost:8080/measurements/bbox?ne_lat=35.690&ne_lng=139.770&sw_lat=35.670&sw_lng=139.750"
+
+# [Production]
+# curl "https://server-production-5adf.up.railway.app/measurements/bbox?ne_lat=35.690&ne_lng=139.770&sw_lat=35.670&sw_lng=139.750"
+
+
+# ----- 自分のデータのみを取得 -----
+# [Local]
+curl "http://localhost:8080/measurements/bbox?ne_lat=35.690&ne_lng=139.770&sw_lat=35.670&sw_lng=139.750&user_id=user-001"
+
+# [Production]
+# curl "https://server-production-5adf.up.railway.app/measurements/bbox?ne_lat=35.690&ne_lng=139.770&sw_lat=35.670&sw_lng=139.750&user_id=user-001"
 ```
 
 ---
