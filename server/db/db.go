@@ -57,19 +57,6 @@ func migrate() {
 		`CREATE INDEX IF NOT EXISTS idx_measurements_location
 			ON measurements (latitude, longitude)`,
 
-		`CREATE TABLE IF NOT EXISTS checkins (
-			id         SERIAL PRIMARY KEY,
-			user_id    TEXT    NOT NULL,
-			latitude   DOUBLE PRECISION NOT NULL,
-			longitude  DOUBLE PRECISION NOT NULL,
-			db         REAL    NOT NULL,
-			message    TEXT    DEFAULT '',
-			created_at TIMESTAMPTZ DEFAULT NOW()
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_checkins_user
-			ON checkins (user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_checkins_location
-			ON checkins (latitude, longitude)`,
 	}
 
 	for _, q := range queries {

@@ -18,10 +18,6 @@ tags:
     description: サーバー疎通確認
   - name: measurements
     description: 環境音測定データの登録・取得
-  - name: checkins
-    description: Sound Check-In（SNSフィード）
-  - name: areas
-    description: エリアマスター
   - name: users
     description: ユーザープロフィールと設定
 
@@ -134,9 +130,18 @@ paths:
           $ref: "#/components/responses/InternalError"
 
     get:
-      summary: 測定データ一覧（最新100件）
+      summary: 測定データ一覧
+      description: 測定データを全件または差分（after_id以降）で取得する。
       tags: [measurements]
       operationId: getMeasurements
+      parameters:
+        - name: after_id
+          in: query
+          required: false
+          description: 指定したIDより大きい（新しい）データのみを取得する。
+          schema:
+            type: integer
+            example: 100
       responses:
         "200":
           description: 測定データ一覧
@@ -146,24 +151,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Measurement"
-        "500":
-          $ref: "#/components/responses/InternalError"
-
-  /measurements/latest:
-    get:
-      summary: 最新の測定データ（1件）
-      description: リアルタイム表示用。最も新しい1件を返す。
-      tags: [measurements]
-      operationId: getLatestMeasurement
-      responses:
-        "200":
-          description: 最新測定データ
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Measurement"
-        "404":
-          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -218,102 +205,6 @@ paths:
                 $ref: "#/components/schemas/AreaResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
-        "500":
-          $ref: "#/components/responses/InternalError"
-
-  /checkins:
-    post:
-      summary: Sound Check-In 投稿
-      description: |
-        BeReal 風の「今のリアル」を音でシェアする。
-        user_id ごとに1日1回の制限はアプリ側で管理する想定。
-      tags: [checkins]
-      operationId: createCheckIn
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateCheckInRequest"
-            example:
-              user_id: "user-abc123"
-              latitude: 35.6812
-              longitude: 139.7671
-              db: 72.0
-              message: "渋谷スクランブル！すごい人混み"
-      responses:
-        "201":
-          description: 投稿成功
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CreatedResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "500":
-          $ref: "#/components/responses/InternalError"
-
-    get:
-      summary: チェックイン一覧（SNSフィード）
-      description: 最新50件のチェックインを新しい順に返す。
-      tags: [checkins]
-      operationId: getCheckIns
-      responses:
-        "200":
-          description: チェックイン一覧
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/CheckIn"
-        "500":
-          $ref: "#/components/responses/InternalError"
-
-  /areas/{radius_km}/master:
-    get:
-      summary: エリアマスター取得
-      description: |
-        指定エリア内で最もチェックイン数が多いユーザーを
-        「エリアマスター（守護者）」として返す。
-      tags: [areas]
-      operationId: getAreaMaster
-      parameters:
-        - name: radius_km
-          in: path
-          required: true
-          description: エリア半径（km）。最大 50
-          schema:
-            type: number
-            format: double
-            example: 0.5
-        - name: lat
-          in: query
-          required: true
-          description: 中心緯度
-          schema:
-            type: number
-            format: double
-            example: 35.6812
-        - name: lng
-          in: query
-          required: true
-          description: 中心経度
-          schema:
-            type: number
-            format: double
-            example: 139.7671
-      responses:
-        "200":
-          description: エリアマスター情報
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AreaMaster"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -420,63 +311,6 @@ components:
           maximum: 180
           example: 139.7671
 
-    CheckIn:
-      type: object
-      properties:
-        id:
-          type: integer
-          example: 1
-        user_id:
-          type: string
-          example: "user-abc123"
-        latitude:
-          type: number
-          format: double
-          example: 35.6812
-        longitude:
-          type: number
-          format: double
-          example: 139.7671
-        db:
-          type: number
-          format: double
-          example: 72.0
-        message:
-          type: string
-          example: "渋谷スクランブル！すごい人混み"
-        created_at:
-          type: string
-          format: date-time
-          example: "2026-04-28T09:00:00Z"
-
-    CreateCheckInRequest:
-      type: object
-      required: [user_id, latitude, longitude, db]
-      properties:
-        user_id:
-          type: string
-          example: "user-abc123"
-        latitude:
-          type: number
-          format: double
-          minimum: -90
-          maximum: 90
-          example: 35.6812
-        longitude:
-          type: number
-          format: double
-          minimum: -180
-          maximum: 180
-          example: 139.7671
-        db:
-          type: number
-          format: double
-          example: 72.0
-        message:
-          type: string
-          maxLength: 280
-          example: "渋谷スクランブル！すごい人混み"
-
     HeatmapPoint:
       type: object
       properties:
@@ -524,30 +358,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/HeatmapPoint"
-
-    AreaMaster:
-      type: object
-      properties:
-        user_id:
-          type: string
-          description: エリアマスターのユーザーID
-          example: "user-abc123"
-        checkins:
-          type: integer
-          description: エリア内のチェックイン数
-          example: 15
-        center_lat:
-          type: number
-          format: double
-          example: 35.6812
-        center_lng:
-          type: number
-          format: double
-          example: 139.7671
-        radius_km:
-          type: number
-          format: double
-          example: 0.5
 
     CreatedResponse:
       type: object
