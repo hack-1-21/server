@@ -19,10 +19,10 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 
 	var u models.User
 	err := db.DB.QueryRow(
-		`SELECT user_id, nickname, level, exp, points, alert_enabled, theme, created_at
+		`SELECT user_id, email, nickname, level, exp, points, alert_enabled, theme, created_at
 		 FROM users WHERE user_id = $1`,
 		userID,
-	).Scan(&u.UserID, &u.Nickname, &u.Level, &u.Exp, &u.Points, &u.AlertEnabled, &u.Theme, &u.CreatedAt)
+	).Scan(&u.UserID, &u.Email, &u.Nickname, &u.Level, &u.Exp, &u.Points, &u.AlertEnabled, &u.Theme, &u.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "ユーザーが見つかりません")
@@ -51,9 +51,9 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	// 現在のユーザー情報を取得
 	var u models.User
 	err := db.DB.QueryRow(
-		`SELECT user_id, nickname, alert_enabled, theme FROM users WHERE user_id = $1`,
+		`SELECT user_id, email, nickname, alert_enabled, theme FROM users WHERE user_id = $1`,
 		userID,
-	).Scan(&u.UserID, &u.Nickname, &u.AlertEnabled, &u.Theme)
+	).Scan(&u.UserID, &u.Email, &u.Nickname, &u.AlertEnabled, &u.Theme)
 
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "ユーザーが見つかりません")

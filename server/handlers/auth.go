@@ -1,13 +1,17 @@
 package handlers
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"hack1-server/db"
 	"hack1-server/models"
 	"log"
 	"net/http"
+	"net/mail"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -37,6 +41,23 @@ func GenerateToken(userID string) (string, error) {
 	return token.SignedString(jwtKey)
 }
 
+func normalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
+func isValidEmail(email string) bool {
+	addr, err := mail.ParseAddress(email)
+	return err == nil && addr.Address == email
+}
+
+func generateUserID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return "user_" + hex.EncodeToString(b), nil
+}
+
 // Register POST /auth/register
 func Register(w http.ResponseWriter, r *http.Request) {
 	var req models.RegisterRequest
@@ -45,8 +66,13 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.UserID == "" || req.Password == "" {
-		respondError(w, http.StatusBadRequest, "user_id と password は必須です")
+	req.Email = normalizeEmail(req.Email)
+	if req.Email == "" || req.Password == "" {
+		respondError(w, http.StatusBadRequest, "email と password は必須です")
+		return
+	}
+	if !isValidEmail(req.Email) {
+		respondError(w, http.StatusBadRequest, "email の形式が不正です")
 		return
 	}
 
@@ -59,6 +85,14 @@ func Register(w http.ResponseWriter, r *http.Request) {
 
 	var u models.User
 	u.UserID = req.UserID
+	if u.UserID == "" {
+		u.UserID, err = generateUserID()
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "ユーザーID生成に失敗しました")
+			return
+		}
+	}
+	u.Email = req.Email
 	u.Nickname = req.Nickname
 	if u.Nickname == "" {
 		u.Nickname = "No Name"
@@ -70,22 +104,47 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	u.Theme = "light"
 	u.CreatedAt = time.Now()
 
+	if u.Email != "" {
+		err = db.DB.QueryRow(
+			`SELECT user_id, email, nickname, level, exp, points, alert_enabled, theme, created_at
+			 FROM users WHERE LOWER(email) = LOWER($1)`,
+			u.Email,
+		).Scan(&u.UserID, &u.Email, &u.Nickname, &u.Level, &u.Exp, &u.Points, &u.AlertEnabled, &u.Theme, &u.CreatedAt)
+		if err != nil && err != sql.ErrNoRows {
+			log.Printf("Googleユーザー取得エラー: %v", err)
+			respondError(w, http.StatusInternalServerError, "ユーザー情報の処理に失敗しました")
+			return
+		}
+		if err == nil {
+			tokenString, err := GenerateToken(u.UserID)
+			if err != nil {
+				respondError(w, http.StatusInternalServerError, "トークン生成に失敗しました")
+				return
+			}
+			respondJSON(w, http.StatusOK, models.AuthResponse{
+				Token: tokenString,
+				User:  u,
+			})
+			return
+		}
+	}
+
 	err = db.DB.QueryRow(
-		`INSERT INTO users (user_id, password_hash, nickname, level, exp, points, alert_enabled, theme, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`INSERT INTO users (user_id, email, password_hash, nickname, level, exp, points, alert_enabled, theme, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		 ON CONFLICT (user_id) DO UPDATE 
-		 SET password_hash = EXCLUDED.password_hash, nickname = EXCLUDED.nickname
+		 SET email = EXCLUDED.email, password_hash = EXCLUDED.password_hash, nickname = EXCLUDED.nickname
 		 WHERE users.password_hash = '' OR users.password_hash IS NULL
-		 RETURNING user_id`,
-		u.UserID, string(hashedPassword), u.Nickname, u.Level, u.Exp, u.Points, u.AlertEnabled, u.Theme, u.CreatedAt,
-	).Scan(&u.UserID)
+		 RETURNING user_id, email`,
+		u.UserID, u.Email, string(hashedPassword), u.Nickname, u.Level, u.Exp, u.Points, u.AlertEnabled, u.Theme, u.CreatedAt,
+	).Scan(&u.UserID, &u.Email)
 
 	if err == sql.ErrNoRows {
-		respondError(w, http.StatusConflict, "そのユーザーIDは既に登録されています")
+		respondError(w, http.StatusConflict, "そのユーザーは既に登録されています")
 		return
 	} else if err != nil {
 		log.Printf("ユーザー作成エラー: %v", err)
-		respondError(w, http.StatusInternalServerError, "登録に失敗しました")
+		respondError(w, http.StatusConflict, "そのメールアドレスは既に登録されています")
 		return
 	}
 
@@ -109,18 +168,23 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "リクエスト形式が不正です")
 		return
 	}
+	req.Email = normalizeEmail(req.Email)
+	if req.Email == "" || req.Password == "" {
+		respondError(w, http.StatusBadRequest, "email と password は必須です")
+		return
+	}
 
 	var u models.User
 	var passwordHash string
 
 	err := db.DB.QueryRow(
-		`SELECT user_id, password_hash, nickname, level, exp, points, alert_enabled, theme, created_at
-		 FROM users WHERE user_id = $1`,
-		req.UserID,
-	).Scan(&u.UserID, &passwordHash, &u.Nickname, &u.Level, &u.Exp, &u.Points, &u.AlertEnabled, &u.Theme, &u.CreatedAt)
+		`SELECT user_id, email, password_hash, nickname, level, exp, points, alert_enabled, theme, created_at
+		 FROM users WHERE LOWER(email) = LOWER($1)`,
+		req.Email,
+	).Scan(&u.UserID, &u.Email, &passwordHash, &u.Nickname, &u.Level, &u.Exp, &u.Points, &u.AlertEnabled, &u.Theme, &u.CreatedAt)
 
 	if err == sql.ErrNoRows {
-		respondError(w, http.StatusUnauthorized, "ユーザーIDまたはパスワードが間違っています")
+		respondError(w, http.StatusUnauthorized, "メールアドレスまたはパスワードが間違っています")
 		return
 	} else if err != nil {
 		log.Printf("ログイン取得エラー: %v", err)
@@ -134,7 +198,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 	err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password))
 	if err != nil {
-		respondError(w, http.StatusUnauthorized, "ユーザーIDまたはパスワードが間違っています")
+		respondError(w, http.StatusUnauthorized, "メールアドレスまたはパスワードが間違っています")
 		return
 	}
 
@@ -182,9 +246,9 @@ func GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var googleClaims struct {
-		Sub   string `json:"sub"`   // GoogleのユーザーID
-		Name  string `json:"name"`  // ユーザー名
-		Email string `json:"email"` // メールアドレス (今回は使わないかもしれないが念のため)
+		Sub   string `json:"sub"`  // GoogleのユーザーID
+		Name  string `json:"name"` // ユーザー名
+		Email string `json:"email"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&googleClaims); err != nil {
@@ -202,6 +266,7 @@ func GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	// ユーザーがDBにいるか確認。いなければ作成 (UPSERT)
 	var u models.User
 	u.UserID = userID
+	u.Email = normalizeEmail(googleClaims.Email)
 	u.Nickname = nickname
 	u.Level = 1
 	u.Exp = 0
@@ -211,13 +276,13 @@ func GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	u.CreatedAt = time.Now()
 
 	err = db.DB.QueryRow(
-		`INSERT INTO users (user_id, password_hash, nickname, level, exp, points, alert_enabled, theme, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`INSERT INTO users (user_id, email, password_hash, nickname, level, exp, points, alert_enabled, theme, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		 ON CONFLICT (user_id) DO UPDATE 
-		 SET nickname = EXCLUDED.nickname
-		 RETURNING user_id, nickname, level, exp, points, alert_enabled, theme, created_at`,
-		u.UserID, "", u.Nickname, u.Level, u.Exp, u.Points, u.AlertEnabled, u.Theme, u.CreatedAt,
-	).Scan(&u.UserID, &u.Nickname, &u.Level, &u.Exp, &u.Points, &u.AlertEnabled, &u.Theme, &u.CreatedAt)
+		 SET email = EXCLUDED.email, nickname = EXCLUDED.nickname
+		 RETURNING user_id, email, nickname, level, exp, points, alert_enabled, theme, created_at`,
+		u.UserID, u.Email, "", u.Nickname, u.Level, u.Exp, u.Points, u.AlertEnabled, u.Theme, u.CreatedAt,
+	).Scan(&u.UserID, &u.Email, &u.Nickname, &u.Level, &u.Exp, &u.Points, &u.AlertEnabled, &u.Theme, &u.CreatedAt)
 
 	if err != nil {
 		log.Printf("Googleユーザー作成/取得エラー: %v", err)
@@ -237,4 +302,3 @@ func GoogleLogin(w http.ResponseWriter, r *http.Request) {
 		User:  u,
 	})
 }
-

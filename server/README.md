@@ -118,9 +118,9 @@ https://server-production-5adf.up.railway.app
   フロントエンド(React Native/Expo等)で取得したGoogleの `id_token` をサーバーに送信すると、サーバー側で検証し、独自JWT `token` とユーザー情報を返却します。
   ※これが最も簡単で安全な実装方法です。
 
-**【任意】ID/パスワード形式**
-- **新規登録 (`/auth/register`)**: `user_id`, `nickname`, `password` を送信して作成。
-- **ログイン (`/auth/login`)**: `user_id`, `password` で検証。
+**【任意】メールアドレス/パスワード形式**
+- **新規登録 (`/auth/register`)**: `email`, `nickname`, `password` を送信して作成。`user_id` は省略可能で、省略時はサーバー側で生成されます。
+- **ログイン (`/auth/login`)**: `email`, `password` で検証。
 
 （※ ハッカソン用途のため、現状では各エンドポイントでのJWTの厳密な検証ミドルウェアは省略していますが、フロントエンド側で取得した `token` を保持しておいてください。）
 
@@ -133,24 +133,24 @@ https://server-production-5adf.up.railway.app
 # [Local]
 curl -X POST http://localhost:8080/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"user_id": "user-001", "nickname": "TestUser", "password": "password123"}'
+  -d '{"email": "test@example.com", "nickname": "TestUser", "password": "password123"}'
 
 # [Production]
 curl -X POST https://server-production-5adf.up.railway.app/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"user_id": "user-001", "nickname": "TestUser", "password": "password123"}'
+  -d '{"email": "test@example.com", "nickname": "TestUser", "password": "password123"}'
 
 
 # ----- ログイン (JWT取得) -----
 # [Local]
 curl -X POST http://localhost:8080/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"user_id": "user-001", "password": "password123"}'
+  -d '{"email": "test@example.com", "password": "password123"}'
 
 # [Production]
 curl -X POST https://server-production-5adf.up.railway.app/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"user_id": "user-001", "password": "password123"}'
+  -d '{"email": "test@example.com", "password": "password123"}'
 
 
 # ----- Google ログイン -----
