@@ -5,6 +5,7 @@ import "time"
 // User はユーザーのプロフィールや設定を保持するモデル
 type User struct {
 	UserID       string    `json:"user_id"`
+	Email        string    `json:"email"`
 	Nickname     string    `json:"nickname"`
 	Level        int       `json:"level"`
 	Exp          int       `json:"exp"`
@@ -23,14 +24,15 @@ type UpdateUserRequest struct {
 
 // RegisterRequest は POST /auth/register のリクエストボディ
 type RegisterRequest struct {
-	UserID   string `json:"user_id"`
+	UserID   string `json:"user_id,omitempty"`
+	Email    string `json:"email"`
 	Nickname string `json:"nickname"`
 	Password string `json:"password"`
 }
 
 // LoginRequest は POST /auth/login のリクエストボディ
 type LoginRequest struct {
-	UserID   string `json:"user_id"`
+	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 

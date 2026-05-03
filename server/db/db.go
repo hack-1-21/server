@@ -36,6 +36,7 @@ func migrate() {
 	queries := []string{
 		`CREATE TABLE IF NOT EXISTS users (
 			user_id    TEXT PRIMARY KEY,
+			email      TEXT NOT NULL DEFAULT '',
 			password_hash TEXT NOT NULL DEFAULT '',
 			nickname   TEXT NOT NULL DEFAULT '',
 			level      INTEGER NOT NULL DEFAULT 1,
@@ -59,6 +60,10 @@ func migrate() {
 			ON measurements (latitude, longitude)`,
 		// 既存テーブルへのカラム追加（安全なアップデート用）
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower
+			ON users (LOWER(email))
+			WHERE email <> ''`,
 	}
 
 	for _, q := range queries {

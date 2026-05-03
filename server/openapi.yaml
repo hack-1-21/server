@@ -44,7 +44,7 @@ paths:
   /auth/register:
     post:
       summary: 新規登録
-      description: ユーザーIDとパスワードでアカウントを作成し、JWTトークンを返す。
+      description: メールアドレスとパスワードでアカウントを作成し、JWTトークンを返す。
       tags: [auth]
       operationId: register
       requestBody:
@@ -63,7 +63,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "409":
-          description: ユーザーIDが既に存在する
+          description: メールアドレスまたはユーザーIDが既に存在する
           content:
             application/json:
               schema:
@@ -74,7 +74,7 @@ paths:
   /auth/login:
     post:
       summary: ログイン
-      description: ユーザーIDとパスワードでログインし、JWTトークンを返す。
+      description: メールアドレスとパスワードでログインし、JWTトークンを返す。
       tags: [auth]
       operationId: login
       requestBody:
@@ -93,7 +93,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
-          description: 認証失敗（IDまたはパスワード間違い）
+          description: 認証失敗（メールアドレスまたはパスワード間違い）
           content:
             application/json:
               schema:
@@ -318,6 +318,10 @@ components:
         user_id:
           type: string
           example: "user-abc123"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
         nickname:
           type: string
           example: "SoundMaster"
@@ -343,11 +347,16 @@ components:
 
     RegisterRequest:
       type: object
-      required: [user_id, nickname, password]
+      required: [email, nickname, password]
       properties:
         user_id:
           type: string
+          description: 省略した場合はサーバー側で生成される
           example: "user-abc123"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
         nickname:
           type: string
           example: "SoundMaster"
@@ -357,11 +366,12 @@ components:
 
     LoginRequest:
       type: object
-      required: [user_id, password]
+      required: [email, password]
       properties:
-        user_id:
+        email:
           type: string
-          example: "user-abc123"
+          format: email
+          example: "user@example.com"
         password:
           type: string
           example: "secretpassword"
