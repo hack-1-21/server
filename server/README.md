@@ -9,6 +9,8 @@
 | 言語 | Go 1.22 |
 | フレームワーク | gorilla/mux |
 | DB | PostgreSQL 16 |
+| 画像生成 | Gemini API (Imagen 3) |
+| ストレージ | Google Cloud Storage (GCS) |
 | コンテナ | Docker / Docker Compose |
 | API 仕様 | OpenAPI 3.0.3 (`openapi.yaml`) |
 
@@ -26,12 +28,15 @@ server/
 │   └── db.go            # PostgreSQL 接続・マイグレーション
 ├── handlers/
 │   ├── helpers.go       # 共通レスポンスヘルパー
-│   ├── measurement.go   # 測定データ CRUD
+│   ├── measurement.go   # 測定データ CRUD・箱庭連動ロジック
+│   ├── garden.go        # 箱庭情報・図鑑取得
+│   ├── image.go         # Gemini/GCS 画像生成ヘルパー
 │   ├── area.go          # エリア検索（ヒートマップ用）
 │   ├── checkin.go       # Sound Check-In
 │   └── spot.go          # エリアマスター
-└── models/
-    └── measurement.go   # 全構造体定義
+├── models/
+│   ├── measurement.go   # 測定データ・APIリクエスト構造体
+│   └── garden.go        # 箱庭・プロフィールの構造体
 ```
 
 ## ローカル開発環境セットアップ
@@ -60,9 +65,13 @@ docker compose up --build
 
 ### 環境変数
 
-| 変数名 | デフォルト | 説明 |
-|--------|-----------|------|
-| `DATABASE_URL` | `postgres://soundreal:soundreal@postgres:5432/soundreal?sslmode=disable` | PostgreSQL 接続文字列 |
+| 変数名 | 説明 |
+|--------|------|
+| `DATABASE_URL` | PostgreSQL 接続文字列 |
+| `JWT_SECRET` | JWT署名用シークレット |
+| `GEMINI_API_KEY` | Gemini APIキー（Imagen画像生成用） |
+| `GCS_BUCKET_NAME` | GCSバケット名 |
+| `GCS_CREDENTIALS_JSON` | GCS認証用JSON（サービスアカウント） |
 
 ---
 
@@ -104,7 +113,10 @@ https://server-production-5adf.up.railway.app
 | `PUT` | `/users/{user_id}` | ユーザープロフィール・設定更新 |
 | `POST` | `/measurements` | 音データ投稿（WearOS から）。経験値・レベルアップ処理含む |
 | `GET` | `/measurements` | 全件または差分取得 (`?after_id=`) |
-| `GET` | `/measurements/bbox` | マップ用：表示範囲内の測定データ取得 (`?ne_lat=&ne_lng=&sw_lat=&sw_lng=&user_id=`) |
+| `GET` | `/measurements/bbox` | マップ用：表示範囲内の測定データ取得 |
+| `GET` | `/users/{user_id}/garden` | 現在のアクティブ箱庭取得 |
+| `GET` | `/users/{user_id}/garden/history` | 図鑑：過去世代の箱庭一覧取得 |
+| `GET` | `/users/{user_id}/profile` | ユーザーLv・EXP・現在の箱庭をまとめて取得 |
 
 詳細は `openapi.yaml` を参照。
 
@@ -175,8 +187,12 @@ curl -X POST https://server-production-5adf.up.railway.app/auth/google \
 
 ## 測定データとマップの取得について
 
-### 1. 音データの投稿 (WearOSからの送信)
-WearOSデバイス等から音データを送信すると、DBに保存されると同時に、ユーザーに経験値が付与されレベルアップの判定が行われます。
+### 1. 音データの投稿と箱庭の成長
+WearOSデバイス等から音データを送信すると、以下の処理が自動で行われます。
+1. **探索ポイント加算**: 1送信 = +1pt
+2. **箱庭の段階アップ**: ポイントが閾値 (400pt, 800pt) を超えると段階が上がり、Gemini APIで新しい箱庭画像が生成されます（非同期）。
+3. **世代交代**: 1000ptに達すると現在の箱庭が保存され、新世代がスタートします。
+4. **経験値・レベルアップ**: 段階アップや世代交代時にユーザーレベルが上がります。
 
 #### 動作確認 (QAテスト): 音データ投稿
 ```bash
