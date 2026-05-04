@@ -215,6 +215,87 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /device/links:
+    get:
+      summary: 連携デバイス一覧
+      description: ログイン済みユーザーに紐づく WearOS デバイス一覧を取得する。
+      tags: [device]
+      operationId: getLinkedDevices
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 連携デバイス一覧
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LinkedDevice"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /device/links/{device_id}:
+    delete:
+      summary: 連携デバイス削除
+      description: ログイン済みユーザーに紐づく指定デバイスの連携を削除する。削除後、その device_token は無効になる。
+      tags: [device]
+      operationId: deleteLinkedDevice
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "device_abc123"
+      responses:
+        "200":
+          description: 削除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: unlinked
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /device/unlink:
+    delete:
+      summary: 現在のデバイス連携削除
+      description: WearOS デバイスが自身の device_token で自分の連携を削除する。削除後、その device_token は無効になる。
+      tags: [device]
+      operationId: unlinkCurrentDevice
+      security:
+        - deviceBearerAuth: []
+      responses:
+        "200":
+          description: 削除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: unlinked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /users/{user_id}:
     get:
       summary: ユーザー情報取得
@@ -528,6 +609,22 @@ components:
         device_token:
           type: string
           example: "dt_abc123"
+
+    LinkedDevice:
+      type: object
+      properties:
+        device_id:
+          type: string
+          example: "device_abc123"
+        linked_at:
+          type: string
+          format: date-time
+          example: "2026-05-04T10:31:00Z"
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-05-04T10:35:00Z"
 
     UpdateUserRequest:
       type: object

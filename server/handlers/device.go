@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/gorilla/mux"
 )
 
 const deviceLinkTTL = 10 * time.Minute
@@ -231,6 +233,106 @@ func PollDeviceLink(w http.ResponseWriter, r *http.Request) {
 		Status:      "linked",
 		DeviceToken: deviceToken,
 	})
+}
+
+// GetLinkedDevices GET /device/links
+func GetLinkedDevices(w http.ResponseWriter, r *http.Request) {
+	userID, err := userIDFromJWT(r)
+	if err != nil {
+		respondError(w, http.StatusUnauthorized, "ログインが必要です")
+		return
+	}
+
+	rows, err := db.DB.Query(
+		`SELECT device_id, linked_at, last_used_at
+		 FROM devices
+		 WHERE user_id = $1
+		 ORDER BY linked_at DESC`,
+		userID,
+	)
+	if err != nil {
+		log.Printf("linked devices query failed: %v", err)
+		respondError(w, http.StatusInternalServerError, "連携デバイスの取得に失敗しました")
+		return
+	}
+	defer rows.Close()
+
+	devices := []models.LinkedDevice{}
+	for rows.Next() {
+		var device models.LinkedDevice
+		var lastUsedAt sql.NullTime
+		if err := rows.Scan(&device.DeviceID, &device.LinkedAt, &lastUsedAt); err != nil {
+			log.Printf("linked device scan failed: %v", err)
+			continue
+		}
+		if lastUsedAt.Valid {
+			device.LastUsedAt = &lastUsedAt.Time
+		}
+		devices = append(devices, device)
+	}
+
+	respondJSON(w, http.StatusOK, devices)
+}
+
+// DeleteLinkedDevice DELETE /device/links/{device_id}
+func DeleteLinkedDevice(w http.ResponseWriter, r *http.Request) {
+	userID, err := userIDFromJWT(r)
+	if err != nil {
+		respondError(w, http.StatusUnauthorized, "ログインが必要です")
+		return
+	}
+
+	vars := mux.Vars(r)
+	deviceID := strings.TrimSpace(vars["device_id"])
+	if deviceID == "" {
+		respondError(w, http.StatusBadRequest, "device_id は必須です")
+		return
+	}
+
+	result, err := db.DB.Exec(
+		`DELETE FROM devices
+		 WHERE device_id = $1
+		   AND user_id = $2`,
+		deviceID, userID,
+	)
+	if err != nil {
+		log.Printf("linked device delete failed: %v", err)
+		respondError(w, http.StatusInternalServerError, "デバイス連携の削除に失敗しました")
+		return
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "デバイス連携の削除結果確認に失敗しました")
+		return
+	}
+	if rowsAffected == 0 {
+		respondError(w, http.StatusNotFound, "連携デバイスが見つかりません")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"status": "unlinked"})
+}
+
+// UnlinkCurrentDevice DELETE /device/unlink
+func UnlinkCurrentDevice(w http.ResponseWriter, r *http.Request) {
+	_, deviceID, err := userIDFromDeviceToken(r)
+	if err != nil {
+		respondError(w, http.StatusUnauthorized, "device_token が無効です")
+		return
+	}
+
+	_, err = db.DB.Exec(
+		`DELETE FROM devices WHERE device_id = $1`,
+		deviceID,
+	)
+	if err != nil {
+		log.Printf("current device unlink failed: %v", err)
+		respondError(w, http.StatusInternalServerError, "デバイス連携の削除に失敗しました")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{"status": "unlinked"})
 }
 
 func userIDFromDeviceToken(r *http.Request) (string, string, error) {
