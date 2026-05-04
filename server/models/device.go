@@ -26,3 +26,8 @@ type LinkedDevice struct {
 	LinkedAt   time.Time  `json:"linked_at"`
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
 }
+
+type CurrentDeviceResponse struct {
+	DeviceID string `json:"device_id"`
+	UserID   string `json:"user_id"`
+}
