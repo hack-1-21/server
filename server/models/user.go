@@ -8,7 +8,8 @@ type User struct {
 	Email        string    `json:"email"`
 	Nickname     string    `json:"nickname"`
 	Level        int       `json:"level"`
-	Exp          int       `json:"exp"`
+	Exp          int       `json:"exp"`      // 現世代の経験値（レベルアップ用）
+	TotalExp     int       `json:"total_exp"` // 累計経験値
 	Points       int       `json:"points"`
 	AlertEnabled bool      `json:"alert_enabled"`
 	Theme        string    `json:"theme"`

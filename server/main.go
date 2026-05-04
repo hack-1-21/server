@@ -37,6 +37,11 @@ func main() {
 	r.HandleFunc("/measurements", handlers.GetMeasurements).Methods("GET")
 	r.HandleFunc("/measurements/bbox", handlers.GetMeasurementsBBox).Methods("GET")
 
+	// ---- 箱庭 ----
+	r.HandleFunc("/users/{user_id}/garden", handlers.GetActiveGarden).Methods("GET")
+	r.HandleFunc("/users/{user_id}/garden/history", handlers.GetGardenHistory).Methods("GET")
+	r.HandleFunc("/users/{user_id}/profile", handlers.GetProfile).Methods("GET")
+
 	// CORS設定（React Native / Expo から叩くために必須）
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
