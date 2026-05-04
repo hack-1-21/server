@@ -32,6 +32,7 @@ func main() {
 	r.HandleFunc("/device/start-link", handlers.StartDeviceLink).Methods("POST")
 	r.HandleFunc("/device/complete-link", handlers.CompleteDeviceLink).Methods("POST")
 	r.HandleFunc("/device/poll-link", handlers.PollDeviceLink).Methods("POST")
+	r.HandleFunc("/device/me", handlers.GetCurrentDevice).Methods("GET")
 	r.HandleFunc("/device/links", handlers.GetLinkedDevices).Methods("GET")
 	r.HandleFunc("/device/links/{device_id}", handlers.DeleteLinkedDevice).Methods("DELETE")
 	r.HandleFunc("/device/unlink", handlers.UnlinkCurrentDevice).Methods("DELETE")

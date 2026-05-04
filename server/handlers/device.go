@@ -235,6 +235,20 @@ func PollDeviceLink(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetCurrentDevice GET /device/me
+func GetCurrentDevice(w http.ResponseWriter, r *http.Request) {
+	userID, deviceID, err := userIDFromDeviceToken(r)
+	if err != nil {
+		respondError(w, http.StatusUnauthorized, "device_token が無効です")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, models.CurrentDeviceResponse{
+		DeviceID: deviceID,
+		UserID:   userID,
+	})
+}
+
 // GetLinkedDevices GET /device/links
 func GetLinkedDevices(w http.ResponseWriter, r *http.Request) {
 	userID, err := userIDFromJWT(r)

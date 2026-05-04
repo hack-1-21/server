@@ -215,6 +215,26 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /device/me:
+    get:
+      summary: 現在のデバイス確認
+      description: WearOS に保存されている device_token がまだ有効か確認する。
+      tags: [device]
+      operationId: getCurrentDevice
+      security:
+        - deviceBearerAuth: []
+      responses:
+        "200":
+          description: 現在のデバイス情報
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentDeviceResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /device/links:
     get:
       summary: 連携デバイス一覧
@@ -625,6 +645,16 @@ components:
           format: date-time
           nullable: true
           example: "2026-05-04T10:35:00Z"
+
+    CurrentDeviceResponse:
+      type: object
+      properties:
+        device_id:
+          type: string
+          example: "device_abc123"
+        user_id:
+          type: string
+          example: "user_abc123"
 
     UpdateUserRequest:
       type: object
