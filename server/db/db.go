@@ -67,6 +67,22 @@ func migrate() {
 			completed_at TIMESTAMPTZ,
 			created_at   TIMESTAMPTZ DEFAULT NOW()
 		)`,
+		`CREATE TABLE IF NOT EXISTS device_link_sessions (
+			id             TEXT PRIMARY KEY,
+			device_id      TEXT NOT NULL,
+			pairing_code  TEXT NOT NULL UNIQUE,
+			expires_at     TIMESTAMPTZ NOT NULL,
+			linked_user_id TEXT,
+			consumed_at    TIMESTAMPTZ,
+			created_at     TIMESTAMPTZ DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS devices (
+			device_id         TEXT PRIMARY KEY,
+			user_id           TEXT NOT NULL REFERENCES users(user_id),
+			device_token_hash TEXT NOT NULL,
+			linked_at         TIMESTAMPTZ DEFAULT NOW(),
+			last_used_at      TIMESTAMPTZ
+		)`,
 		// インデックス
 		`CREATE INDEX IF NOT EXISTS idx_measurements_location
 			ON measurements (latitude, longitude)`,
@@ -74,6 +90,12 @@ func migrate() {
 			ON gardens (user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_gardens_active
 			ON gardens (user_id, is_active)`,
+		`CREATE INDEX IF NOT EXISTS idx_device_link_sessions_device_id
+			ON device_link_sessions (device_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_device_link_sessions_pairing_code
+			ON device_link_sessions (pairing_code)`,
+		`CREATE INDEX IF NOT EXISTS idx_devices_token_hash
+			ON devices (device_token_hash)`,
 		// 既存テーブルへのカラム追加（安全なアップデート用）
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''`,

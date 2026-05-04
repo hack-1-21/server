@@ -15,7 +15,6 @@ type Measurement struct {
 
 // CreateMeasurementRequest は POST /measurements のリクエストボディ
 type CreateMeasurementRequest struct {
-	UserID    string  `json:"user_id"`
 	DB        float64 `json:"db"`
 	Hz        float64 `json:"hz"`
 	Latitude  float64 `json:"latitude"`

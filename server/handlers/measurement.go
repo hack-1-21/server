@@ -10,8 +10,14 @@ import (
 )
 
 // CreateMeasurement POST /measurements
-// WearOS から dB・Hz・緯度・経度・user_id を受け取って保存する
+// WearOS から dB・Hz・緯度・経度を受け取り、device_token に紐づく user_id で保存する
 func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
+	userID, _, err := userIDFromDeviceToken(r)
+	if err != nil {
+		respondError(w, http.StatusUnauthorized, "device_token が無効です")
+		return
+	}
+
 	var req models.CreateMeasurementRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "リクエストのJSON形式が不正です")
@@ -40,7 +46,7 @@ func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
 	err = tx.QueryRow(
 		`INSERT INTO measurements (user_id, db, hz, latitude, longitude)
 		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		req.UserID, req.DB, req.Hz, req.Latitude, req.Longitude,
+		userID, req.DB, req.Hz, req.Latitude, req.Longitude,
 	).Scan(&measurementID)
 	if err != nil {
 		log.Printf("measurements INSERT失敗: %v", err)
@@ -52,17 +58,17 @@ func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
 	var u models.User
 	err = tx.QueryRow(
 		`SELECT user_id, level, exp, total_exp FROM users WHERE user_id = $1 FOR UPDATE`,
-		req.UserID,
+		userID,
 	).Scan(&u.UserID, &u.Level, &u.Exp, &u.TotalExp)
 
 	if err == sql.ErrNoRows {
-		u.UserID = req.UserID
+		u.UserID = userID
 		u.Level = 1
 		u.Exp = 0
 		u.TotalExp = 0
 		_, err = tx.Exec(
 			`INSERT INTO users (user_id, level, exp, total_exp) VALUES ($1, $2, $3, $4)`,
-			u.UserID, u.Level, u.Exp, u.TotalExp,
+			userID, u.Level, u.Exp, u.TotalExp,
 		)
 		if err != nil {
 			log.Printf("users INSERT失敗: %v", err)
@@ -81,19 +87,19 @@ func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
 		`SELECT id, generation, points, stage, image_url
 		 FROM gardens WHERE user_id = $1 AND is_active = TRUE
 		 ORDER BY generation DESC LIMIT 1 FOR UPDATE`,
-		req.UserID,
+		userID,
 	).Scan(&garden.ID, &garden.Generation, &garden.Points, &garden.Stage, &garden.ImageURL)
 
 	if err == sql.ErrNoRows {
 		// 初回：箱庭を作成
-		garden.UserID = req.UserID
+		garden.UserID = userID
 		garden.Generation = 1
 		garden.Points = 0
 		garden.Stage = 1
 		err = tx.QueryRow(
 			`INSERT INTO gardens (user_id, generation, points, stage, is_active)
 			 VALUES ($1, $2, $3, $4, TRUE) RETURNING id`,
-			req.UserID, garden.Generation, garden.Points, garden.Stage,
+			userID, garden.Generation, garden.Points, garden.Stage,
 		).Scan(&garden.ID)
 		if err != nil {
 			log.Printf("gardens INSERT失敗: %v", err)
@@ -130,7 +136,7 @@ func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
 	// 5. ユーザー更新
 	_, err = tx.Exec(
 		`UPDATE users SET level = $1, total_exp = $2 WHERE user_id = $3`,
-		u.Level, u.TotalExp, req.UserID,
+		u.Level, u.TotalExp, userID,
 	)
 	if err != nil {
 		log.Printf("users UPDATE失敗: %v", err)
@@ -155,7 +161,7 @@ func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
 		err = tx.QueryRow(
 			`INSERT INTO gardens (user_id, generation, points, stage, is_active)
 			 VALUES ($1, $2, 0, 1, TRUE) RETURNING id`,
-			req.UserID, newGen,
+			userID, newGen,
 		).Scan(&newGardenID)
 		if err != nil {
 			log.Printf("gardens INSERT(新世代)失敗: %v", err)
@@ -192,7 +198,7 @@ func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
 		capturedGardenID := garden.ID
 		capturedStage := garden.Stage
 		capturedGeneration := garden.Generation
-		capturedUserID := req.UserID
+		capturedUserID := userID
 
 		GenerateAndSaveGardenImage(capturedGardenID, capturedStage, capturedGeneration, capturedUserID,
 			func(gid int, imageURL string) {

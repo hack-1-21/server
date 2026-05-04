@@ -28,6 +28,11 @@ func main() {
 	r.HandleFunc("/auth/login", handlers.Login).Methods("POST")
 	r.HandleFunc("/auth/google", handlers.GoogleLogin).Methods("POST")
 
+	// ---- デバイス連携 ----
+	r.HandleFunc("/device/start-link", handlers.StartDeviceLink).Methods("POST")
+	r.HandleFunc("/device/complete-link", handlers.CompleteDeviceLink).Methods("POST")
+	r.HandleFunc("/device/poll-link", handlers.PollDeviceLink).Methods("POST")
+
 	// ---- ユーザー ----
 	r.HandleFunc("/users/{user_id}", handlers.GetUser).Methods("GET")
 	r.HandleFunc("/users/{user_id}", handlers.UpdateUser).Methods("PUT")
@@ -45,8 +50,8 @@ func main() {
 	// CORS設定（React Native / Expo から叩くために必須）
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "POST", "OPTIONS"},
-		AllowedHeaders: []string{"Content-Type"},
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders: []string{"Content-Type", "Authorization"},
 	})
 	handler := c.Handler(r)
 	port := os.Getenv("PORT")
