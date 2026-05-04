@@ -22,6 +22,8 @@ tags:
     description: ユーザー認証（JWT）
   - name: users
     description: ユーザープロフィールと設定
+  - name: device
+    description: WearOS デバイス連携
 
 paths:
   /health:
@@ -133,6 +135,86 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /device/start-link:
+    post:
+      summary: デバイス連携開始
+      description: WearOS デバイス用の device_id と短いペアリングコードを発行する。
+      tags: [device]
+      operationId: startDeviceLink
+      responses:
+        "201":
+          description: ペアリングコード発行成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartDeviceLinkResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /device/complete-link:
+    post:
+      summary: デバイス連携完了
+      description: ログイン済みユーザーがペアリングコードを入力し、デバイスとユーザーを紐づける。
+      tags: [device]
+      operationId: completeDeviceLink
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteDeviceLinkRequest"
+            example:
+              code: "ABCD-1234"
+      responses:
+        "200":
+          description: 連携成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: linked
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /device/poll-link:
+    post:
+      summary: デバイス連携状態取得
+      description: WearOS デバイスが定期的に呼び、連携完了後に device_token を受け取る。
+      tags: [device]
+      operationId: pollDeviceLink
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PollDeviceLinkRequest"
+            example:
+              device_id: "device_abc123"
+      responses:
+        "200":
+          description: 連携状態
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PollDeviceLinkResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /users/{user_id}:
     get:
       summary: ユーザー情報取得
@@ -196,9 +278,11 @@ paths:
   /measurements:
     post:
       summary: 音データ投稿
-      description: WearOS デバイスから dB・Hz・位置情報を受け取り保存する。
+      description: WearOS デバイスから dB・Hz・位置情報を受け取り、device_token に紐づく user_id で保存する。
       tags: [measurements]
       operationId: createMeasurement
+      security:
+        - deviceBearerAuth: []
       requestBody:
         required: true
         content:
@@ -206,7 +290,6 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateMeasurementRequest"
             example:
-              user_id: "user-abc123"
               db: 65.5
               hz: 440.0
               latitude: 35.6812
@@ -220,6 +303,8 @@ paths:
                 $ref: "#/components/schemas/CreatedResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -311,6 +396,16 @@ paths:
           $ref: "#/components/responses/InternalError"
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    deviceBearerAuth:
+      type: http
+      scheme: bearer
+      description: WearOS に発行された device_token
+
   schemas:
     User:
       type: object
@@ -394,6 +489,46 @@ components:
         user:
           $ref: "#/components/schemas/User"
 
+    StartDeviceLinkResponse:
+      type: object
+      properties:
+        device_id:
+          type: string
+          example: "device_abc123"
+        pairing_code:
+          type: string
+          example: "ABCD-1234"
+        expires_in_seconds:
+          type: integer
+          example: 600
+
+    CompleteDeviceLinkRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          example: "ABCD-1234"
+
+    PollDeviceLinkRequest:
+      type: object
+      required: [device_id]
+      properties:
+        device_id:
+          type: string
+          example: "device_abc123"
+
+    PollDeviceLinkResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, linked, expired]
+          example: linked
+        device_token:
+          type: string
+          example: "dt_abc123"
+
     UpdateUserRequest:
       type: object
       properties:
@@ -442,9 +577,6 @@ components:
       type: object
       required: [db, hz, latitude, longitude]
       properties:
-        user_id:
-          type: string
-          example: "user-abc123"
         db:
           type: number
           format: double
@@ -492,6 +624,12 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
     NotFound:
       description: データが存在しない
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: 認証に失敗
       content:
         application/json:
           schema:
