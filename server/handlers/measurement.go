@@ -10,8 +10,14 @@ import (
 )
 
 // CreateMeasurement POST /measurements
-// WearOS から dB・Hz・緯度・経度・user_id を受け取って保存する
+// WearOS から dB・Hz・緯度・経度を受け取り、device_token に紐づく user_id で保存する
 func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
+	userID, _, err := userIDFromDeviceToken(r)
+	if err != nil {
+		respondError(w, http.StatusUnauthorized, "device_token が無効です")
+		return
+	}
+
 	var req models.CreateMeasurementRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "リクエストのJSON形式が不正です")
@@ -39,7 +45,7 @@ func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
 	err = tx.QueryRow(
 		`INSERT INTO measurements (user_id, db, hz, latitude, longitude)
 		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		req.UserID, req.DB, req.Hz, req.Latitude, req.Longitude,
+		userID, req.DB, req.Hz, req.Latitude, req.Longitude,
 	).Scan(&id)
 	if err != nil {
 		log.Printf("INSERT失敗: %v", err)
@@ -51,7 +57,7 @@ func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
 	var u models.User
 	err = tx.QueryRow(
 		`SELECT level, exp, points FROM users WHERE user_id = $1 FOR UPDATE`,
-		req.UserID,
+		userID,
 	).Scan(&u.Level, &u.Exp, &u.Points)
 
 	if err == sql.ErrNoRows {
@@ -61,7 +67,7 @@ func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
 		u.Points = 0
 		_, err = tx.Exec(
 			`INSERT INTO users (user_id, level, exp, points) VALUES ($1, $2, $3, $4)`,
-			req.UserID, u.Level, u.Exp, u.Points,
+			userID, u.Level, u.Exp, u.Points,
 		)
 		if err != nil {
 			log.Printf("ユーザー作成失敗: %v", err)
@@ -90,7 +96,7 @@ func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
 	// ユーザー情報更新
 	_, err = tx.Exec(
 		`UPDATE users SET level = $1, exp = $2, points = $3 WHERE user_id = $4`,
-		u.Level, u.Exp, u.Points, req.UserID,
+		u.Level, u.Exp, u.Points, userID,
 	)
 	if err != nil {
 		log.Printf("ユーザー更新失敗: %v", err)
