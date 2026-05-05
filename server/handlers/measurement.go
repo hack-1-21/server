@@ -194,7 +194,7 @@ func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 6. 段階アップ時は非同期で画像生成
-	if stageUp && isGCSConfigured() {
+	if stageUp && isImageGenerationConfigured() {
 		capturedGardenID := garden.ID
 		capturedStage := garden.Stage
 		capturedGeneration := garden.Generation

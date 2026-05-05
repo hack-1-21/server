@@ -10,7 +10,7 @@
 | フレームワーク | gorilla/mux |
 | DB | PostgreSQL 16 |
 | 画像生成 | Gemini API (Imagen 3) |
-| ストレージ | Google Cloud Storage (GCS) |
+| ストレージ | ローカルストレージ (Railway Volume等) |
 | コンテナ | Docker / Docker Compose |
 | API 仕様 | OpenAPI 3.0.3 (`openapi.yaml`) |
 
@@ -30,7 +30,7 @@ server/
 │   ├── helpers.go       # 共通レスポンスヘルパー
 │   ├── measurement.go   # 測定データ CRUD・箱庭連動ロジック
 │   ├── garden.go        # 箱庭情報・図鑑取得
-│   ├── image.go         # Gemini/GCS 画像生成ヘルパー
+│   ├── image.go         # Gemini画像生成・保存ヘルパー
 │   ├── area.go          # エリア検索（ヒートマップ用）
 │   ├── checkin.go       # Sound Check-In
 │   └── spot.go          # エリアマスター
@@ -70,8 +70,7 @@ docker compose up --build
 | `DATABASE_URL` | PostgreSQL 接続文字列 |
 | `JWT_SECRET` | JWT署名用シークレット |
 | `GEMINI_API_KEY` | Gemini APIキー（Imagen画像生成用） |
-| `GCS_BUCKET_NAME` | GCSバケット名 |
-| `GCS_CREDENTIALS_JSON` | GCS認証用JSON（サービスアカウント） |
+| `STORAGE_DIR` | 画像保存先ディレクトリ（デフォルト: `./data/images`） |
 
 ---
 

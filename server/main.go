@@ -51,6 +51,13 @@ func main() {
 	r.HandleFunc("/users/{user_id}/garden/history", handlers.GetGardenHistory).Methods("GET")
 	r.HandleFunc("/users/{user_id}/profile", handlers.GetProfile).Methods("GET")
 
+	// ---- 画像の静的配信 (Railway Volume等) ----
+	dataDir := os.Getenv("STORAGE_DIR")
+	if dataDir == "" {
+		dataDir = "./data/images"
+	}
+	r.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir(dataDir))))
+
 	// CORS設定（React Native / Expo から叩くために必須）
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},

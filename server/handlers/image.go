@@ -11,11 +11,8 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"strings"
+	"path/filepath"
 	"time"
-
-	"cloud.google.com/go/storage"
-	"google.golang.org/api/option"
 )
 
 // ===========================
@@ -141,41 +138,34 @@ func generateGardenImage(prompt string) ([]byte, error) {
 }
 
 // ===========================
-// GCS アップロード
+// ローカル保存 (Railway Volume想定)
 // ===========================
 
-func uploadToGCS(ctx context.Context, imgData []byte, userID string, generation, stage int) (string, error) {
-	bucketName := os.Getenv("GCS_BUCKET_NAME")
-	credJSON := os.Getenv("GCS_CREDENTIALS_JSON")
-
-	if bucketName == "" || credJSON == "" {
-		return "", fmt.Errorf("GCS_BUCKET_NAME または GCS_CREDENTIALS_JSON が未設定です")
+func saveToLocalFile(imgData []byte, userID string, generation, stage int) (string, error) {
+	// 保存先のディレクトリパス（環境変数になければデフォルト値）
+	dataDir := os.Getenv("STORAGE_DIR")
+	if dataDir == "" {
+		dataDir = "./data/images"
 	}
 
-	client, err := storage.NewClient(ctx,
-		option.WithCredentialsJSON([]byte(credJSON)),
-	)
-	if err != nil {
-		return "", fmt.Errorf("GCS クライアント作成失敗: %w", err)
-	}
-	defer client.Close()
-
-	objectPath := fmt.Sprintf("gardens/%s/%d/stage%d_%d.png",
-		userID, generation, stage, time.Now().Unix(),
-	)
-
-	wc := client.Bucket(bucketName).Object(objectPath).NewWriter(ctx)
-	wc.ContentType = "image/png"
-	// 公開アクセス（バケット側でallUsersにstorage.objectViewerを設定済み前提）
-
-	if _, err := wc.Write(imgData); err != nil {
-		return "", fmt.Errorf("GCS 書き込み失敗: %w", err)
-	}
-	if err := wc.Close(); err != nil {
-		return "", fmt.Errorf("GCS クローズ失敗: %w", err)
+	// ユーザーディレクトリの作成
+	userDir := filepath.Join(dataDir, "gardens", userID)
+	if err := os.MkdirAll(userDir, 0755); err != nil {
+		return "", fmt.Errorf("ディレクトリ作成失敗: %w", err)
 	}
 
-	publicURL := fmt.Sprintf("https://storage.googleapis.com/%s/%s", bucketName, objectPath)
+	// ファイル名（タイムスタンプ付き）
+	fileName := fmt.Sprintf("%d_stage%d_%d.png", generation, stage, time.Now().Unix())
+	filePath := filepath.Join(userDir, fileName)
+
+	// ファイル書き込み
+	if err := os.WriteFile(filePath, imgData, 0644); err != nil {
+		return "", fmt.Errorf("ファイル保存失敗: %w", err)
+	}
+
+	// 公開アクセス用URLパスの生成（フロントからアクセスするためのパス）
+	// 例: /images/gardens/user_abc/1_stage1_123456789.png
+	publicURL := fmt.Sprintf("/images/gardens/%s/%s", userID, fileName)
 	return publicURL, nil
 }
 
@@ -196,12 +186,9 @@ func GenerateAndSaveGardenImage(gardenID, stage, generation int, userID string, 
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		imageURL, err := uploadToGCS(ctx, imgData, userID, generation, stage)
+		imageURL, err := saveToLocalFile(imgData, userID, generation, stage)
 		if err != nil {
-			log.Printf("[画像生成] GCS アップロードエラー: %v", err)
+			log.Printf("[画像生成] 保存エラー: %v", err)
 			return
 		}
 
@@ -210,10 +197,7 @@ func GenerateAndSaveGardenImage(gardenID, stage, generation int, userID string, 
 	}()
 }
 
-// isGCSConfigured は GCS の設定が揃っているか確認する
-func isGCSConfigured() bool {
-	return os.Getenv("GCS_BUCKET_NAME") != "" &&
-		os.Getenv("GCS_CREDENTIALS_JSON") != "" &&
-		os.Getenv("GEMINI_API_KEY") != "" &&
-		!strings.Contains(os.Getenv("GCS_CREDENTIALS_JSON"), "dummy")
+// isImageGenerationConfigured は Gemini API の設定が揃っているか確認する
+func isImageGenerationConfigured() bool {
+	return os.Getenv("GEMINI_API_KEY") != ""
 }
