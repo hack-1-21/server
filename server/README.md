@@ -10,7 +10,7 @@
 | フレームワーク | gorilla/mux |
 | DB | PostgreSQL 16 |
 | 画像生成 | Gemini API (Imagen 3) |
-| ストレージ | ローカルストレージ (Railway Volume等) |
+| ストレージ | ローカルストレージ (Railway Volume) |
 | コンテナ | Docker / Docker Compose |
 | API 仕様 | OpenAPI 3.0.3 (`openapi.yaml`) |
 
@@ -187,24 +187,36 @@ curl -X POST https://server-production-5adf.up.railway.app/auth/google \
 ## 測定データとマップの取得について
 
 ### 1. 音データの投稿と箱庭の成長
-WearOSデバイス等から音データを送信すると、以下の処理が自動で行われます。
+WearOSデバイスから音データを送信する際、**ヘッダーに `Authorization: Bearer <device_token>` を含める**ことで、そのデバイスを紐付けたユーザー（スマホ側でログインしたユーザー）としてデータが保存されます。
+
+送信すると、以下の処理が自動で行われます。
 1. **探索ポイント加算**: 1送信 = +1pt
-2. **箱庭の段階アップ**: ポイントが閾値 (400pt, 800pt) を超えると段階が上がり、Gemini APIで新しい箱庭画像が生成されます（非同期）。
-3. **世代交代**: 1000ptに達すると現在の箱庭が保存され、新世代がスタートします。
+2. **箱庭の段階アップ**: 
+   - 0〜399pt: 第1段階 (Stage 1)
+   - 400〜799pt: 第2段階 (Stage 2)
+   - 800〜999pt: 第3段階 (Stage 3)
+   ※ ポイントが閾値を超えて段階が上がると、Gemini APIで新しい箱庭画像が生成されます（非同期）。
+3. **世代交代**: 1000ptに達すると現在の箱庭が保存され、新世代 (Stage 1) がスタートします。前の世代は「図鑑」に入ります。
 4. **経験値・レベルアップ**: 段階アップや世代交代時にユーザーレベルが上がります。
 
-#### 動作確認 (QAテスト): 音データ投稿
-```bash
-# [Local]
-curl -X POST http://localhost:8080/measurements \
-  -H "Content-Type: application/json" \
-  -d '{"user_id": "user-001", "db": 65.5, "hz": 440.0, "latitude": 35.6812, "longitude": 139.7671}'
+#### 画像生成（プロンプト・パラメータ）の変更方法
+画像生成のプロンプトやGemini APIのパラメータを変更したい場合は、以下のファイルを編集してください。
+- **プロンプト**: `server/handlers/image.go` の `buildPrompt()` 関数
+- **パラメータ**: 同ファイルの `generateGardenImage()` 内の `imagenParameters`（アスペクト比など）
 
+#### 生成された画像の確認方法
+生成された画像は Railway の Volume に保存されます。APIのレスポンスに含まれる `image_url`（例: `/images/gardens/user_abc/1_stage2_123.png`）を本番URLの後ろにくっつけてブラウザで開くと画像が見られます。
+例: `https://server-production-5adf.up.railway.app/images/gardens/user_abc/1_stage2_123.png`
+
+#### 図鑑（過去の箱庭）の取得
+世代交代を終えた過去の箱庭のリストは、以下のAPIで取得できます。
+```bash
 # [Production]
-# curl -X POST https://server-production-5adf.up.railway.app/measurements \
-#   -H "Content-Type: application/json" \
-#   -d '{"user_id": "user-001", "db": 65.5, "hz": 440.0, "latitude": 35.6812, "longitude": 139.7671}'
+curl -X GET https://server-production-5adf.up.railway.app/users/user-001/garden/history
 ```
+※ レスポンスには、世代(`generation`)、ポイント、最終段階、画像URLなどが含まれます。
+
+
 
 ### 2. マップ用データ取得 (バウンディングボックス)
 マップ画面の表示範囲（北東と南西の緯度経度）を指定して、そこに含まれるすべてのデータを取得します。
@@ -229,19 +241,53 @@ curl "http://localhost:8080/measurements/bbox?ne_lat=35.690&ne_lng=139.770&sw_la
 
 ---
 
-## 開発・デバッグ用ツール
+## テスト・デバッグ用ツール
 
-### データベースの全リセット (初期化)
+本番環境のデータ確認や、箱庭の進化テストを行うための便利なコマンド集です。
+Git Bash 等でそのままコピー＆ペーストして実行できます。
+
+### 1. 現在の全ユーザーの箱庭状態を確認する
+本番環境にどんなデータが入っているか、誰がどの箱庭ステージにいるかを確認するスクリプトです。画像が生成されている場合は、そのままブラウザで開けるURL（リンク）が表示されます。
+
+```bash
+# 測定データから一意の user_id を抽出し、それぞれの箱庭情報を取得する
+users=$(curl -s https://server-production-5adf.up.railway.app/measurements | grep -o '"user_id":"[^"]*' | cut -d'"' -f4 | sort -u)
+
+if [ -z "$users" ]; then
+  echo "データが空です（まだ誰もデータを送っていません）"
+else
+  echo "--- 登録されている箱庭一覧 ---"
+  for user in $users; do
+    echo "UserID: $user"
+    res=$(curl -s "https://server-production-5adf.up.railway.app/users/$user/garden")
+    echo "  Data: $res"
+    img=$(echo $res | grep -o '"image_url":"[^"]*' | cut -d'"' -f4)
+    if [ -n "$img" ]; then
+      echo "  Image Link: https://server-production-5adf.up.railway.app$img"
+    fi
+    echo ""
+  done
+fi
+```
+
+### 2. 箱庭の強制進化・ポイント追加（テスト用）
+手動で何百回もデータを送らなくても、以下のエンドポイントを叩くことで強制的にポイントを追加し、箱庭の進化や画像生成をテストできます。
+
+```bash
+# 例: user-001 に 400ポイント を強制付与して「段階アップ（画像生成）」を発生させる
+curl -X POST https://server-production-5adf.up.railway.app/debug/garden/add-points \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "user-001", "points": 400}'
+```
+
+### 3. データベースの全リセット (初期化)
 ハッカソンのデモ前や、古いダミーデータでおかしくなった場合に、**データベースのすべてのユーザーと測定データを完全に消去**するAPIです。
 
 ```bash
-# [Local]
-curl -X DELETE http://localhost:8080/debug/reset
-
 # [Production]
 curl -X DELETE https://server-production-5adf.up.railway.app/debug/reset
 ```
-※ 実行すると `users` と `measurements` テーブルが空になり、最初のクリーンな状態に戻ります。
+※ 実行すると `users`, `measurements`, `gardens` 等のデータが空になり、最初のクリーンな状態に戻ります。
 
 ---
 
