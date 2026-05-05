@@ -113,9 +113,10 @@ func DebugAddGardenPoints(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if generationUp {
+		historyImageURL := fmt.Sprintf("/images/gardens/%s/%s_gen%d.png", req.UserID, req.UserID, garden.Generation)
 		_, _ = tx.Exec(
-			`UPDATE gardens SET points = $1, stage = $2, is_active = FALSE, completed_at = NOW() WHERE id = $3`,
-			garden.Points, garden.Stage, garden.ID,
+			`UPDATE gardens SET points = $1, stage = $2, is_active = FALSE, completed_at = NOW(), image_url = $3 WHERE id = $4`,
+			garden.Points, garden.Stage, historyImageURL, garden.ID,
 		)
 		newGen := garden.Generation + 1
 		var newID int

@@ -146,9 +146,10 @@ func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
 
 	if generationUp {
 		// 世代交代: 現世代を完了 → 新世代作成
+		historyImageURL := fmt.Sprintf("/images/gardens/%s/%s_gen%d.png", userID, userID, garden.Generation)
 		_, err = tx.Exec(
-			`UPDATE gardens SET points = $1, stage = $2, is_active = FALSE, completed_at = NOW() WHERE id = $3`,
-			garden.Points, garden.Stage, garden.ID,
+			`UPDATE gardens SET points = $1, stage = $2, is_active = FALSE, completed_at = NOW(), image_url = $3 WHERE id = $4`,
+			garden.Points, garden.Stage, historyImageURL, garden.ID,
 		)
 		if err != nil {
 			log.Printf("gardens UPDATE(完了)失敗: %v", err)

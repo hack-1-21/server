@@ -153,18 +153,28 @@ func saveToLocalFile(imgData []byte, userID string, generation, stage int) (stri
 		return "", fmt.Errorf("ディレクトリ作成失敗: %w", err)
 	}
 
-	// ファイル名（タイムスタンプ付き）
-	fileName := fmt.Sprintf("%d_stage%d_%d.png", generation, stage, time.Now().Unix())
-	filePath := filepath.Join(userDir, fileName)
+	// 1. 図鑑保存用・履歴用ファイル名（例: user-001_gen1.png）
+	genFileName := fmt.Sprintf("%s_gen%d.png", userID, generation)
+	genFilePath := filepath.Join(userDir, genFileName)
 
-	// ファイル書き込み
-	if err := os.WriteFile(filePath, imgData, 0644); err != nil {
-		return "", fmt.Errorf("ファイル保存失敗: %w", err)
+	// 2. 現在育成中・アクティブ用ファイル名（例: user-001.png）
+	// フロント側が世代管理を気にせず常に固定のURLで取得できるようにする
+	activeFileName := fmt.Sprintf("%s.png", userID)
+	activeFilePath := filepath.Join(userDir, activeFileName)
+
+	// ファイル書き込み（図鑑用）
+	if err := os.WriteFile(genFilePath, imgData, 0644); err != nil {
+		return "", fmt.Errorf("図鑑用ファイル保存失敗: %w", err)
 	}
 
-	// 公開アクセス用URLパスの生成（フロントからアクセスするためのパス）
-	// 例: /images/gardens/user_abc/1_stage1_123456789.png
-	publicURL := fmt.Sprintf("/images/gardens/%s/%s", userID, fileName)
+	// ファイル書き込み（アクティブ用）
+	if err := os.WriteFile(activeFilePath, imgData, 0644); err != nil {
+		return "", fmt.Errorf("アクティブ用ファイル保存失敗: %w", err)
+	}
+
+	// APIレスポンスとしてDBに保存するURL（アクティブ用のパスを返す）
+	// 例: /images/gardens/user-001/user-001.png
+	publicURL := fmt.Sprintf("/images/gardens/%s/%s", userID, activeFileName)
 	return publicURL, nil
 }
 
