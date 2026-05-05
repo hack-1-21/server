@@ -23,9 +23,15 @@ var animals2 = []string{"rabbits and deer", "foxes and owls", "deer and hedgehog
 var animals3 = []string{"foxes, deer, rabbits, owls, and fireflies", "wolves, deer, bears, and fairies", "unicorns, rabbits, foxes, and butterflies"}
 
 func buildPrompt(stage, generation int) string {
+	// 季節・天候は「世代（generation）」をシードにして固定する
+	// → 同じ世代のStage 1・2・3で必ず同じ季節・天候になる
+	// → 世代が変わると異なるテーマになる
+	genRand := rand.New(rand.NewSource(int64(generation * 1234567)))
+	season := seasons[genRand.Intn(len(seasons))]
+	weather := weathers[genRand.Intn(len(weathers))]
+
+	// 動物はステージごとに毎回ランダム（同じ世代でもStageごとに違う動物）
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	season := seasons[r.Intn(len(seasons))]
-	weather := weathers[r.Intn(len(weathers))]
 
 	base := fmt.Sprintf(
 		"A magical miniature world inside a glass bottle, fantasy art style, %s %s, ",
