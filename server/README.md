@@ -154,6 +154,71 @@ https://server-production-5adf.up.railway.app
 
 ---
 
+## 認証とゲスト対応について
+
+### 1. ユーザー登録とログイン
+このAPIはJWT (JSON Web Token) を用いた認証の基礎を提供しています。
+
+**【推奨】Googleログイン (フロントエンド連携)**
+- **Googleログイン (`/auth/google`)**:
+  フロントエンド(React Native/Expo等)で取得したGoogleの `id_token` をサーバーに送信すると、サーバー側で検証し、独自JWT `token` とユーザー情報を返却します。
+  ※これが最も簡単で安全な実装方法です。
+
+**【任意】メールアドレス/パスワード形式**
+- **新規登録 (`/auth/register`)**: `email`, `nickname`, `password` を送信して作成。`user_id` は省略可能で、省略時はサーバー側で生成されます。
+- **ログイン (`/auth/login`)**: `email`, `password` で検証。
+
+（※ ハッカソン用途のため、現状では各エンドポイントでのJWTの厳密な検証ミドルウェアは省略していますが、フロントエンド側で取得した `token` を保持しておいてください。）
+
+#### 動作確認 (QAテスト): ユーザー登録とログイン
+環境に合わせて、ローカルか本番(Production)のURLを選択して実行してください。
+※ Windowsの場合は、コマンドプロンプトやPowerShellではなく **Git Bash** を使用するとそのままコピペで実行できます。
+
+```bash
+# ----- 新規登録 -----
+# [Local]
+curl -X POST http://localhost:8080/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@example.com", "nickname": "TestUser", "password": "password123"}'
+
+# [Production]
+curl -X POST https://server-production-5adf.up.railway.app/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@example.com", "nickname": "TestUser", "password": "password123"}'
+
+
+# ----- ログイン (JWT取得) -----
+# [Local]
+curl -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@example.com", "password": "password123"}'
+
+# [Production]
+curl -X POST https://server-production-5adf.up.railway.app/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@example.com", "password": "password123"}'
+
+
+# ----- Google ログイン -----
+# フロントエンドから取得した実際の id_token を入れてテストしてください
+# [Local]
+curl -X POST http://localhost:8080/auth/google \
+  -H "Content-Type: application/json" \
+  -d '{"id_token": "YOUR_GOOGLE_ID_TOKEN_HERE"}'
+
+# [Production]
+curl -X POST https://server-production-5adf.up.railway.app/auth/google \
+  -H "Content-Type: application/json" \
+  -d '{"id_token": "YOUR_GOOGLE_ID_TOKEN_HERE"}'
+```
+
+### 2. ゲストユーザーの扱い
+ハッカソンのデモ等で一時的な「ゲスト」としてアプリに入る場合、**バックエンド側に専用のアカウントを作成する必要はありません**。
+- `/measurements/bbox` などのデータ取得APIは誰でも（トークン無しでも）アクセス可能です。
+- ゲストは `user_id` を持たないため、「他人が取った音のマップ」は閲覧できますが、「自分の取った音のマップ」の取得条件 (`&user_id=...` の指定) は利用できない、という形で自然にアクセス制限が実現されます。
+
+---
+
 ## 箱庭システムの仕様
 
 ### ゲームループ
@@ -324,3 +389,9 @@ curl "https://server-production-5adf.up.railway.app/measurements/bbox?ne_lat=35.
 # 特定ユーザーのデータのみ絞り込む
 curl "https://server-production-5adf.up.railway.app/measurements/bbox?ne_lat=35.690&ne_lng=139.770&sw_lat=35.670&sw_lng=139.750&user_id=user-001"
 ```
+---
+
+## API 仕様書の閲覧
+
+`openapi.yaml` を [Swagger Editor](https://editor.swagger.io/) または VS Code の OpenAPI 拡張で開くと、
+インタラクティブに API を確認できる。
