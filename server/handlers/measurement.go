@@ -170,6 +170,14 @@ func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusInternalServerError, "新世代の箱庭作成に失敗しました")
 			return
 		}
+
+		// 新世代（Stage 1）の初期画像も生成する
+		if isImageGenerationConfigured() {
+			GenerateAndSaveGardenImage(newGardenID, 1, newGen, userID,
+				func(gid int, url string) {
+					db.DB.Exec(`UPDATE gardens SET image_url = $1 WHERE id = $2 AND is_active = TRUE`, url, gid)
+				})
+		}
 		// レスポンス用に新世代情報を反映
 		garden.Generation = newGen
 		garden.Points = 0

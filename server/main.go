@@ -55,6 +55,7 @@ func main() {
 	r.HandleFunc("/debug/reset", handlers.ResetDatabase).Methods("DELETE")
 	r.HandleFunc("/debug/users", handlers.GetAllUsersDebug).Methods("GET")
 	r.HandleFunc("/debug/garden/add-points", handlers.DebugAddGardenPoints).Methods("POST")
+	r.HandleFunc("/debug/test-gemini", handlers.TestGeminiDebug).Methods("GET")
 
 	// ---- 画像の静的配信 (Railway Volume等) ----
 	dataDir := os.Getenv("STORAGE_DIR")

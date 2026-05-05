@@ -148,6 +148,20 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ユーザー作成成功時、初期の箱庭 (Generation 1, Stage 1) を作成し、画像を生成する
+	var initGardenID int
+	err = db.DB.QueryRow(
+		`INSERT INTO gardens (user_id, generation, points, stage, is_active)
+		 VALUES ($1, 1, 0, 1, TRUE) ON CONFLICT DO NOTHING RETURNING id`,
+		u.UserID,
+	).Scan(&initGardenID)
+	if err == nil && initGardenID > 0 && isImageGenerationConfigured() {
+		GenerateAndSaveGardenImage(initGardenID, 1, 1, u.UserID,
+			func(gid int, url string) {
+				db.DB.Exec(`UPDATE gardens SET image_url = $1 WHERE id = $2 AND is_active = TRUE`, url, gid)
+			})
+	}
+
 	// JWT生成
 	tokenString, err := GenerateToken(u.UserID)
 	if err != nil {

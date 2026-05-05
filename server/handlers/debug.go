@@ -126,6 +126,14 @@ func DebugAddGardenPoints(w http.ResponseWriter, r *http.Request) {
 			 VALUES ($1, $2, 0, 1, TRUE) RETURNING id`,
 			req.UserID, newGen,
 		).Scan(&newID)
+
+		if isImageGenerationConfigured() {
+			GenerateAndSaveGardenImage(newID, 1, newGen, req.UserID,
+				func(gid int, url string) {
+					db.DB.Exec(`UPDATE gardens SET image_url = $1 WHERE id = $2 AND is_active = TRUE`, url, gid)
+				})
+		}
+
 		garden.Generation = newGen
 		garden.Points = 0
 		garden.Stage = 1
@@ -178,4 +186,27 @@ func GetAllUsersDebug(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	respondJSON(w, http.StatusOK, users)
+}
+
+// TestGeminiDebug GET /debug/test-gemini
+// Gemini API を同期的に呼び出してエラー詳細をブラウザに返すテスト用API
+func TestGeminiDebug(w http.ResponseWriter, r *http.Request) {
+	if !isImageGenerationConfigured() {
+		respondError(w, http.StatusInternalServerError, "GEMINI_API_KEY が環境変数に設定されていません")
+		return
+	}
+
+	// 試しに画像生成APIを直接呼んでみる
+	// generateGardenImage は image.go 内の関数（同じ handlers パッケージ）
+	imgData, err := generateGardenImage("a tiny rabbit in a beautiful garden, photorealistic")
+	if err != nil {
+		// APIからのエラーメッセージをそのまま画面に表示
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Gemini API エラー: %v", err))
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{
+		"message": "Gemini APIは正常に動作しています！",
+		"size":    fmt.Sprintf("%d bytes", len(imgData)),
+	})
 }
