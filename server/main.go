@@ -51,6 +51,10 @@ func main() {
 	r.HandleFunc("/users/{user_id}/garden/history", handlers.GetGardenHistory).Methods("GET")
 	r.HandleFunc("/users/{user_id}/profile", handlers.GetProfile).Methods("GET")
 
+	// ---- デバッグ ----
+	r.HandleFunc("/debug/reset", handlers.ResetDatabase).Methods("DELETE")
+	r.HandleFunc("/debug/garden/add-points", handlers.DebugAddGardenPoints).Methods("POST")
+
 	// ---- 画像の静的配信 (Railway Volume等) ----
 	dataDir := os.Getenv("STORAGE_DIR")
 	if dataDir == "" {
