@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"hack1-server/db"
 	"hack1-server/models"
@@ -189,38 +188,36 @@ func GetAllUsersDebug(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, users)
 }
 
-// TestGeminiDebug GET /debug/test-gemini
-// Gemini API を同期的に呼び出してエラー詳細をブラウザに返すテスト用API
-func TestGeminiDebug(w http.ResponseWriter, r *http.Request) {
+// TestCloudflareDebug GET /debug/test-cloudflare
+// Cloudflare Workers AI を同期的に呼び出してエラー詳細をブラウザに返すテスト用API
+func TestCloudflareDebug(w http.ResponseWriter, r *http.Request) {
 	if !isImageGenerationConfigured() {
-		respondError(w, http.StatusInternalServerError, "GEMINI_API_KEY が環境変数に設定されていません")
+		respondError(w, http.StatusInternalServerError, "CF_ACCOUNT_ID または CF_API_TOKEN が環境変数に設定されていません")
 		return
 	}
 
-	imgData, err := generateGardenImage("a tiny rabbit in a beautiful garden, photorealistic")
+	imgData, err := generateGardenImage("a tiny rabbit in a beautiful magical garden, photorealistic")
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Gemini API エラー: %v", err))
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Cloudflare API エラー: %v", err))
 		return
 	}
 
 	respondJSON(w, http.StatusOK, map[string]string{
-		"message": "Gemini APIは正常に動作しています！",
+		"message": "Cloudflare Workers AI は正常に動作しています！",
 		"size":    fmt.Sprintf("%d bytes", len(imgData)),
 	})
 }
 
-// ListModelsDebug GET /debug/list-models
-// 利用可能なモデル一覧を取得する
-func ListModelsDebug(w http.ResponseWriter, r *http.Request) {
-	apiKey := os.Getenv("GEMINI_API_KEY")
-	url := "https://generativelanguage.googleapis.com/v1beta/models?key=" + apiKey
-	resp, err := http.Get(url)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, err.Error())
-		return
+// CheckCFConfigDebug GET /debug/check-cf-config
+// CF_ACCOUNT_ID と CF_API_TOKEN が設定されているか確認する
+func CheckCFConfigDebug(w http.ResponseWriter, r *http.Request) {
+	accountID := os.Getenv("CF_ACCOUNT_ID")
+	apiToken := os.Getenv("CF_API_TOKEN")
+
+	result := map[string]bool{
+		"CF_ACCOUNT_ID_set": accountID != "",
+		"CF_API_TOKEN_set":  apiToken != "",
+		"configured":        accountID != "" && apiToken != "",
 	}
-	defer resp.Body.Close()
-	var data interface{}
-	json.NewDecoder(resp.Body).Decode(&data)
-	respondJSON(w, http.StatusOK, data)
+	respondJSON(w, http.StatusOK, result)
 }

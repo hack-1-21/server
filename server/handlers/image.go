@@ -2,8 +2,6 @@ package handlers
 
 import (
 	"bytes"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -59,78 +57,61 @@ func buildPrompt(stage, generation int) string {
 }
 
 // ===========================
-// Gemini Imagen API 呼び出し
+// Cloudflare Workers AI 呼び出し
 // ===========================
 
-type imagenRequest struct {
-	Instances  []imagenInstance  `json:"instances"`
-	Parameters imagenParameters  `json:"parameters"`
-}
-
-type imagenInstance struct {
-	Prompt string `json:"prompt"`
-}
-
-type imagenParameters struct {
-	SampleCount int    `json:"sampleCount"`
-	AspectRatio string `json:"aspectRatio"`
-}
-
-type imagenResponse struct {
-	Predictions []struct {
-		BytesBase64Encoded string `json:"bytesBase64Encoded"`
-		MimeType           string `json:"mimeType"`
-	} `json:"predictions"`
-}
-
 func generateGardenImage(prompt string) ([]byte, error) {
-	apiKey := os.Getenv("GEMINI_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("GEMINI_API_KEY が設定されていません")
+	accountID := os.Getenv("CF_ACCOUNT_ID")
+	apiToken := os.Getenv("CF_API_TOKEN")
+
+	if accountID == "" || apiToken == "" {
+		return nil, fmt.Errorf("CF_ACCOUNT_ID または CF_API_TOKEN が環境変数に設定されていません")
 	}
 
-	// Imagen 4 モデルを使用
-	url := fmt.Sprintf(
-		"https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=%s",
-		apiKey,
+	endpoint := fmt.Sprintf(
+		"https://api.cloudflare.com/client/v4/accounts/%s/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0",
+		accountID,
 	)
 
-	reqBody := imagenRequest{
-		Instances: []imagenInstance{{Prompt: prompt}},
-		Parameters: imagenParameters{
-			SampleCount: 1,
-			AspectRatio: "1:1",
-		},
-	}
+	// リクエストボディ: {"prompt": "..."}
+	reqBodyJSON := fmt.Sprintf(`{"prompt": %q}`, prompt)
 
-	bodyBytes, err := json.Marshal(reqBody)
+	req, err := http.NewRequest("POST", endpoint, bytes.NewBufferString(reqBodyJSON))
 	if err != nil {
 		return nil, fmt.Errorf("リクエスト生成失敗: %w", err)
 	}
+	req.Header.Set("Authorization", "Bearer "+apiToken)
+	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.Post(url, "application/json", bytes.NewReader(bodyBytes))
+	client := &http.Client{Timeout: 90 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Gemini API 呼び出し失敗: %w", err)
+		return nil, fmt.Errorf("Cloudflare API 呼び出し失敗: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// 429: レートリミット
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, fmt.Errorf("Cloudflare API レートリミット超過 (429): しばらく待ってから再試行してください")
+	}
+	// 401/403: 認証エラー
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("Cloudflare API 認証エラー (%d): %s", resp.StatusCode, string(body))
+	}
+	// その他エラー
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Gemini API エラー %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("Cloudflare API エラー %d: %s", resp.StatusCode, string(body))
 	}
 
-	var imagenResp imagenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&imagenResp); err != nil {
-		return nil, fmt.Errorf("レスポンス解析失敗: %w", err)
-	}
-
-	if len(imagenResp.Predictions) == 0 {
-		return nil, fmt.Errorf("画像が生成されませんでした")
-	}
-
-	imgData, err := base64.StdEncoding.DecodeString(imagenResp.Predictions[0].BytesBase64Encoded)
+	// Cloudflare Workers AI はバイナリ（PNG/JPEG）をそのまま返す
+	imgData, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("Base64 デコード失敗: %w", err)
+		return nil, fmt.Errorf("レスポンス読み込み失敗: %w", err)
+	}
+	if len(imgData) == 0 {
+		return nil, fmt.Errorf("画像が生成されませんでした（レスポンスが空）")
 	}
 
 	return imgData, nil
@@ -191,7 +172,7 @@ func GenerateAndSaveGardenImage(gardenID, stage, generation int, userID string, 
 
 		imgData, err := generateGardenImage(prompt)
 		if err != nil {
-			log.Printf("[画像生成] Gemini API エラー: %v", err)
+			log.Printf("[画像生成] Cloudflare API エラー: %v", err)
 			return
 		}
 
@@ -206,7 +187,7 @@ func GenerateAndSaveGardenImage(gardenID, stage, generation int, userID string, 
 	}()
 }
 
-// isImageGenerationConfigured は Gemini API の設定が揃っているか確認する
+// isImageGenerationConfigured は Cloudflare Workers AI の設定が揃っているか確認する
 func isImageGenerationConfigured() bool {
-	return os.Getenv("GEMINI_API_KEY") != ""
+	return os.Getenv("CF_ACCOUNT_ID") != "" && os.Getenv("CF_API_TOKEN") != ""
 }
