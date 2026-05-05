@@ -205,16 +205,52 @@ WearOSデバイスから音データを送信する際、**ヘッダーに `Auth
 - **パラメータ**: 同ファイルの `generateGardenImage()` 内の `imagenParameters`（アスペクト比など）
 
 #### 生成された画像の確認方法
-生成された画像は Railway の Volume に保存されます。APIのレスポンスに含まれる `image_url`（例: `/images/gardens/user_abc/1_stage2_123.png`）を本番URLの後ろにくっつけてブラウザで開くと画像が見られます。
-例: `https://server-production-5adf.up.railway.app/images/gardens/user_abc/1_stage2_123.png`
+生成された画像は Railway の Volume に保存されます。APIのレスポンスに含まれる `image_url`（例: `/images/gardens/user-001/user-001_gen1.png`）を本番URLの後ろにくっつけてブラウザで開くと画像が見られます。
+例: `https://server-production-5adf.up.railway.app/images/gardens/user-001/user-001_gen1.png`
 
 #### 図鑑（過去の箱庭）の取得
-世代交代を終えた過去の箱庭のリストは、以下のAPIで取得できます。
+世代交代を終えた過去の箱庭のリストは、以下のAPIで取得できます。現在育成中のアクティブな箱庭は除外され、過去の世代（第1世代、第2世代...）の最終形態がすべて配列で返ってきます。
+
 ```bash
 # [Production]
 curl -X GET https://server-production-5adf.up.railway.app/users/user-001/garden/history
 ```
-※ レスポンスには、世代(`generation`)、ポイント、最終段階、画像URLなどが含まれます。
+
+**レスポンス例（JSON）:**
+```json
+[
+  {
+    "id": 1,
+    "user_id": "user-001",
+    "generation": 1,
+    "points": 1000,
+    "stage": 3,
+    "image_url": "/images/gardens/user-001/user-001_gen1.png",
+    "is_active": false,
+    "completed_at": "2026-05-01T10:00:00Z",
+    "created_at": "2026-04-30T10:00:00Z"
+  },
+  {
+    "id": 2,
+    "user_id": "user-001",
+    "generation": 2,
+    "points": 1000,
+    "stage": 3,
+    "image_url": "/images/gardens/user-001/user-001_gen2.png",
+    "is_active": false,
+    "completed_at": "2026-05-15T10:00:00Z",
+    "created_at": "2026-05-01T10:00:00Z"
+  }
+]
+```
+
+#### 生成される画像のファイル名ルール
+フロントエンドからURLを予測しやすくするため、画像ファイル名は以下の形式で保存されます。
+`{user_id}_gen{generation}.png`（例: `user-001_gen1.png`）
+
+**上書きの仕様:**
+- 同じ世代（Generation）の中で段階（Stage 1 → Stage 2 → Stage 3）が上がるたびに、**同じファイル名で上書き保存**されます。これによりサーバーの容量を節約し、常にその世代の最新の画像が取得できます。
+- 1000pt に達して**世代交代（Generation Up）が発生すると、ファイル名の `gen` 番号が変わる**（例: `_gen2.png` になる）ため、過去の世代の画像は上書きされずに図鑑用として残ります。
 
 
 
@@ -243,18 +279,37 @@ curl "http://localhost:8080/measurements/bbox?ne_lat=35.690&ne_lng=139.770&sw_la
 
 ## テスト・デバッグ用ツール
 
-本番環境のデータ確認や、箱庭の進化テストを行うための便利なコマンド集です。
-Git Bash 等でそのままコピー＆ペーストして実行できます。
+本番環境で「ユーザー登録 → 箱庭の成長 → 画像生成 → 状態確認」の一連のフローを手動でテストするための手順です。
+以下のコマンドを **Git Bash** 等で順番に実行してください。
 
-### 1. 現在の全ユーザーの箱庭状態を確認する
-本番環境にどんなデータが入っているか、誰がどの箱庭ステージにいるかを確認するスクリプトです。画像が生成されている場合は、そのままブラウザで開けるURL（リンク）が表示されます。
-
+### ステップ1: 新しいテストユーザーを作成する
+まずはテスト用のユーザーを作成します（例として `test-user-99` を作成します）。
 ```bash
-# 測定データから一意の user_id を抽出し、それぞれの箱庭情報を取得する
-users=$(curl -s https://server-production-5adf.up.railway.app/measurements | grep -o '"user_id":"[^"]*' | cut -d'"' -f4 | sort -u)
+curl -X POST https://server-production-5adf.up.railway.app/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "test-user-99", "email": "test99@example.com", "nickname": "Tester", "password": "password123"}'
+```
 
+### ステップ2: 箱庭にポイントを追加して強制進化させる
+手動で何百回もデータを送らなくても、以下のデバッグAPIを叩くことで強制的にポイントを追加し、箱庭の進化や画像生成を引き起こせます。
+```bash
+# test-user-99 に 400ポイント を付与して「段階アップ（Stage 2へ）」を発生させる
+curl -X POST https://server-production-5adf.up.railway.app/debug/garden/add-points \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "test-user-99", "points": 400}'
+```
+※ コマンド実行後、裏でGemini APIによる画像生成が走るため、数秒待ちます。
+
+### ステップ3: 生成されたアクティブな画像を確認する
+ブラウザで以下のURLを開き、画像が生成されているか確認します。
+👉 `https://server-production-5adf.up.railway.app/images/gardens/test-user-99/test-user-99.png`
+
+### ステップ4: 全ユーザーの箱庭状態を一覧で確認する
+本番環境にどんなデータが入っているか、誰がどの箱庭ステージにいるかを一覧で確認するスクリプトです。画像が生成されている場合は、そのままブラウザで開けるリンクが表示されます。
+```bash
+users=$(curl -s https://server-production-5adf.up.railway.app/measurements | grep -o '"user_id":"[^"]*' | cut -d'"' -f4 | sort -u)
 if [ -z "$users" ]; then
-  echo "データが空です（まだ誰もデータを送っていません）"
+  echo "データが空です"
 else
   echo "--- 登録されている箱庭一覧 ---"
   for user in $users; do
@@ -270,24 +325,13 @@ else
 fi
 ```
 
-### 2. 箱庭の強制進化・ポイント追加（テスト用）
-手動で何百回もデータを送らなくても、以下のエンドポイントを叩くことで強制的にポイントを追加し、箱庭の進化や画像生成をテストできます。
-
-```bash
-# 例: user-001 に 400ポイント を強制付与して「段階アップ（画像生成）」を発生させる
-curl -X POST https://server-production-5adf.up.railway.app/debug/garden/add-points \
-  -H "Content-Type: application/json" \
-  -d '{"user_id": "user-001", "points": 400}'
-```
-
-### 3. データベースの全リセット (初期化)
+### 【任意】データベースの全リセット (初期化)
 ハッカソンのデモ前や、古いダミーデータでおかしくなった場合に、**データベースのすべてのユーザーと測定データを完全に消去**するAPIです。
-
 ```bash
 # [Production]
 curl -X DELETE https://server-production-5adf.up.railway.app/debug/reset
 ```
-※ 実行すると `users`, `measurements`, `gardens` 等のデータが空になり、最初のクリーンな状態に戻ります。
+※ 実行すると `users`, `measurements`, `gardens` 等のデータが完全に空になります。
 
 ---
 
