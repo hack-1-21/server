@@ -91,7 +91,7 @@ func generateGardenImage(prompt string) ([]byte, error) {
 
 	// Imagen 3 モデルを使用
 	url := fmt.Sprintf(
-		"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=%s",
+		"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=%s",
 		apiKey,
 	)
 

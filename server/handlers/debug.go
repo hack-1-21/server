@@ -196,11 +196,8 @@ func TestGeminiDebug(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 試しに画像生成APIを直接呼んでみる
-	// generateGardenImage は image.go 内の関数（同じ handlers パッケージ）
 	imgData, err := generateGardenImage("a tiny rabbit in a beautiful garden, photorealistic")
 	if err != nil {
-		// APIからのエラーメッセージをそのまま画面に表示
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Gemini API エラー: %v", err))
 		return
 	}
@@ -209,4 +206,20 @@ func TestGeminiDebug(w http.ResponseWriter, r *http.Request) {
 		"message": "Gemini APIは正常に動作しています！",
 		"size":    fmt.Sprintf("%d bytes", len(imgData)),
 	})
+}
+
+// ListModelsDebug GET /debug/list-models
+// 利用可能なモデル一覧を取得する
+func ListModelsDebug(w http.ResponseWriter, r *http.Request) {
+	apiKey := os.Getenv("GEMINI_API_KEY")
+	url := "https://generativelanguage.googleapis.com/v1beta/models?key=" + apiKey
+	resp, err := http.Get(url)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer resp.Body.Close()
+	var data interface{}
+	json.NewDecoder(resp.Body).Decode(&data)
+	respondJSON(w, http.StatusOK, data)
 }
