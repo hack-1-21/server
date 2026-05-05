@@ -53,6 +53,7 @@ func main() {
 
 	// ---- デバッグ ----
 	r.HandleFunc("/debug/reset", handlers.ResetDatabase).Methods("DELETE")
+	r.HandleFunc("/debug/users", handlers.GetAllUsersDebug).Methods("GET")
 	r.HandleFunc("/debug/garden/add-points", handlers.DebugAddGardenPoints).Methods("POST")
 
 	// ---- 画像の静的配信 (Railway Volume等) ----

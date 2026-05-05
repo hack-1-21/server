@@ -307,8 +307,8 @@ curl -X POST https://server-production-5adf.up.railway.app/debug/garden/add-poin
 ### ステップ4: 全ユーザーの箱庭状態を一覧で確認する
 本番環境にどんなデータが入っているか、誰がどの箱庭ステージにいるかを一覧で確認するスクリプトです。画像が生成されている場合は、そのままブラウザで開けるリンクが表示されます。
 ```bash
-users=$(curl -s https://server-production-5adf.up.railway.app/measurements | grep -o '"user_id":"[^"]*' | cut -d'"' -f4 | sort -u)
-if [ -z "$users" ]; then
+users=$(curl -s https://server-production-5adf.up.railway.app/debug/users | grep -o '"[^"]*"' | tr -d '"')
+if [ -z "$users" ] || [ "$users" == "null" ]; then
   echo "データが空です"
 else
   echo "--- 登録されている箱庭一覧 ---"

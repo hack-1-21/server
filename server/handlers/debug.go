@@ -159,3 +159,23 @@ func DebugAddGardenPoints(w http.ResponseWriter, r *http.Request) {
 		"generation_up": generationUp,
 	})
 }
+
+// GetAllUsersDebug GET /debug/users
+// テスト用に全ユーザーの user_id の一覧を取得するエンドポイント
+func GetAllUsersDebug(w http.ResponseWriter, r *http.Request) {
+	rows, err := db.DB.Query(`SELECT user_id FROM users ORDER BY created_at DESC`)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "ユーザー一覧の取得に失敗しました")
+		return
+	}
+	defer rows.Close()
+
+	var users []string
+	for rows.Next() {
+		var uid string
+		if err := rows.Scan(&uid); err == nil {
+			users = append(users, uid)
+		}
+	}
+	respondJSON(w, http.StatusOK, users)
+}
