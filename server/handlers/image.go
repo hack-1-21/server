@@ -89,9 +89,9 @@ func generateGardenImage(prompt string) ([]byte, error) {
 		return nil, fmt.Errorf("GEMINI_API_KEY が設定されていません")
 	}
 
-	// Imagen 3 モデルを使用
+	// Imagen 4 モデルを使用
 	url := fmt.Sprintf(
-		"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=%s",
+		"https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=%s",
 		apiKey,
 	)
 
