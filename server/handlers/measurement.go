@@ -126,7 +126,7 @@ func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
 	if stageUp {
 		gainedExp = models.StageExpGain[garden.Stage]
 	}
-	// 世代交代時はさらに +100 EXP
+	// 世代交代時はさらに +400 EXP
 	if generationUp {
 		gainedExp += models.WorldGenEXP
 	}
