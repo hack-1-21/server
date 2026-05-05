@@ -145,7 +145,7 @@ func DebugAddGardenPoints(w http.ResponseWriter, r *http.Request) {
 	if stageUp && isImageGenerationConfigured() {
 		GenerateAndSaveGardenImage(garden.ID, garden.Stage, garden.Generation, req.UserID,
 			func(gid int, url string) {
-				db.DB.Exec(`UPDATE gardens SET image_url = $1 WHERE id = $2`, url, gid)
+				db.DB.Exec(`UPDATE gardens SET image_url = $1 WHERE id = $2 AND is_active = TRUE`, url, gid)
 			})
 	}
 

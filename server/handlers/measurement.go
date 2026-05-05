@@ -197,17 +197,10 @@ func CreateMeasurement(w http.ResponseWriter, r *http.Request) {
 
 	// 6. 段階アップ時は非同期で画像生成
 	if stageUp && isImageGenerationConfigured() {
-		capturedGardenID := garden.ID
-		capturedStage := garden.Stage
-		capturedGeneration := garden.Generation
-		capturedUserID := userID
-
-		GenerateAndSaveGardenImage(capturedGardenID, capturedStage, capturedGeneration, capturedUserID,
-			func(gid int, imageURL string) {
-				_, err := db.DB.Exec(
-					`UPDATE gardens SET image_url = $1 WHERE id = $2`,
-					imageURL, gid,
-				)
+		GenerateAndSaveGardenImage(garden.ID, garden.Stage, garden.Generation, userID,
+			func(gid int, url string) {
+				// 既に世代交代して非アクティブになっている場合はURLを上書きしない（履歴用の_genXURLを保つため）
+				_, err := db.DB.Exec(`UPDATE gardens SET image_url = $1 WHERE id = $2 AND is_active = TRUE`, url, gid)
 				if err != nil {
 					log.Printf("gardens image_url UPDATE失敗: %v", err)
 				}
