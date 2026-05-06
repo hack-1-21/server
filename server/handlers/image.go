@@ -14,60 +14,52 @@ import (
 )
 
 // ===========================
-// プロンプト設定（画角固定・正統進化ガチガチ版）
+// プロンプト設定（季節ランダム・構図固定版）
 // ===========================
 
-// 1. カメラ位置と瓶の形を完全に固定するベースプロンプト
-var BasePrompt = "straight-on front view, perfect centered composition, a single symmetrical glass potion bottle in the exact center, flat 2D vector art, clean lines, cel shaded, fantasy storybook illustration, simple minimalist background"
+// 共通するスタイル・背景定義
+// ※動物（ウサギなど）を削除し、「straight-on front view, perfect centered composition（真正面からの完全な中央構図）」を追加してブレを極力防ぎます。
+var SharedStyle = "anime style, detailed vector art, pastel color palette, soft magical lighting, whimsical atmosphere, straight-on front view, perfect centered composition, single symmetrical glass bottle in the center. Background: deep ancient forest, moss-covered Greek-style stone temple ruins in the distance, ancient stone stele with Nordic runes on both sides."
 
-// 2. 世代(generation)ごとの動物の進化ツリー（Stage1 -> Stage2 -> Stage3）
-// これにより「途中で動物がすり替わる」のを防ぎ、正統進化を演出します
-var animalEvolutions = [][]string{
-	{"a tiny sleeping baby fox", "a playful young fox", "a majestic adult fox with glowing magical tails"},
-	{"a small baby deer fawn", "a proud young deer", "a legendary stag with glowing crystal antlers"},
-	{"a tiny fluffy baby rabbit", "a quick young rabbit", "a mythical guardian rabbit with star-like glowing ears"},
+// レベル 1: 始まりの瓶
+var Stage1Prompt = "A detailed anime-style illustration of a simple, clear glass bottle sealed with a plain cork. A faint, wispy magical vapor rises from the cork. Inside the bottle, there is a miniature terrarium with a central young tree, growing from a patch of soil. The ground has sparse grass, a few small flowers, and scattered grey pebbles. A tiny, subtle rainbow arcs over the soil."
+
+// レベル 2: 成長途中の魔法瓶
+var Stage2Prompt = "A magnificent anime-style illustration of a decorative glass bottle with elegant gold ornate frames and filigree. It is sealed with a cork adorned with a gem. The bottle emits a vibrant glowing aura. Inside, a lush central tree stands amidst a rich garden with glowing crystals, mushrooms, and lush grass. Tiny winged fairies and glowing motes fly around the tree. A prominent small rainbow arcs over the landscape inside the glass."
+
+// レベル 3: 完成された究極の魔法瓶
+var Stage3Prompt = "The ultimate anime-style illustration of a divine, heavily ornamented glass bottle. The entire bottle is encased in intricate gold filigree set with large gems, resting on a luxurious decorated base with intertwined vines. From the bottle’s neck, a colossal, brilliant rainbow arcs outwards into the forest. Inside the terrarium, life is incredibly dense: a massive central ancient tree surrounded by diverse flowers, large crystals, and mushrooms. Countless fairies and glowing magical particles create a dazzling, mystical spectacle. A second, smaller rainbow is visible inside the bottle."
+
+// 季節の属性（世代ごとにランダムで決定される）
+// 景色や色合いに強く影響を与えるようにテーマ化しています。
+var Seasons = []string{
+	"[Spring theme: blooming pink cherry blossoms, fresh green leaves, gentle warm breeze, pink and bright green tones]",
+	"[Summer theme: vibrant deep green foliage, glowing bright sunlight, vivid colorful summer flowers, high contrast]",
+	"[Autumn theme: fiery red and golden orange leaves, falling autumn foliage, warm amber lighting]",
+	"[Winter theme: covered in sparkling white snow, icy frost crystals, cool magical blue lighting, glowing ice]",
 }
 
 func buildPrompt(stage, generation int) string {
-	// 世代番号を元に、どの動物の血統（ツリー）にするか決定
-	// generation=1ならキツネ、2ならシカ、3ならウサギ...（ループします）
-	animalTreeIndex := (generation - 1) % len(animalEvolutions)
-	animalTree := animalEvolutions[animalTreeIndex]
+	// 世代（generation）をシード値にして季節を決定
+	// これにより、同じ世代（例：第1世代）の成長中（Stage1〜3）は季節が途中で変わらないようになります
+	genRand := rand.New(rand.NewSource(int64(generation * 12345)))
+	season := Seasons[genRand.Intn(len(Seasons))]
 
-	// 進化段階に合わせて動物の姿（文字列）を取得
-	// stageは1, 2, 3を想定しているので、インデックスは stage-1
-	animalIndex := stage - 1
-	if animalIndex < 0 {
-		animalIndex = 0
-	}
-	if animalIndex > 2 {
-		animalIndex = 2
-	}
-	currentAnimal := animalTree[animalIndex]
-
-	// 季節や天候も世代で固定し、Stageが変わっても背景の雰囲気がブレないようにする
-	genRand := rand.New(rand.NewSource(int64(generation * 9999)))
-	seasons := []string{"spring season", "summer season", "autumn season"}
-	season := seasons[genRand.Intn(len(seasons))]
-
-	// ステージごとの内部の描写（瓶の中身の進化）
-	var stageDescription string
+	var base string
 	switch stage {
 	case 1:
-		stageDescription = fmt.Sprintf("inside the bottle: a small patch of dirt, a tiny green sprout, %s resting near the sprout", currentAnimal)
+		base = Stage1Prompt
 	case 2:
-		stageDescription = fmt.Sprintf("inside the bottle: a healthy growing sapling tree, %s standing proudly next to the tree, small glowing flowers", currentAnimal)
+		base = Stage2Prompt
 	case 3:
-		stageDescription = fmt.Sprintf("inside the bottle: a giant ancient magical tree filling the glass, %s guarding the tree, brilliant glowing crystals, a small rainbow", currentAnimal)
+		base = Stage3Prompt
 	default:
-		stageDescription = fmt.Sprintf("inside the bottle: a magical garden, %s", currentAnimal)
+		base = Stage3Prompt // 想定外の数値が来たら最終形態にする
 	}
 
-	// 最終的なプロンプトの組み立て
-	// [画角とスタイルの固定] + [季節] + [瓶の中身と動物の進化]
-	finalPrompt := fmt.Sprintf("%s, %s, %s", BasePrompt, season, stageDescription)
-
-	return finalPrompt
+	// 最終的なプロンプトの組み立て: 
+	// [ベースとなる瓶と木の状態] + [季節の属性] + [共通のスタイルと背景]
+	return fmt.Sprintf("%s %s %s", base, season, SharedStyle)
 }
 
 // ===========================
