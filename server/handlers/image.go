@@ -84,7 +84,7 @@ func generateGardenImage(prompt string) ([]byte, error) {
 	// リクエストボディ: プロンプトと画像サイズ（縦長 9:16 に設定）
 	reqData := map[string]interface{}{
 		"prompt": prompt,
-		"width":  576,
+		"width":  768,
 		"height": 1024,
 	}
 	reqBodyBytes, err := json.Marshal(reqData)
