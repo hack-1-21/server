@@ -14,30 +14,30 @@ import (
 )
 
 // ===========================
-// プロンプト設定（ジオラマ強制・サイズ修正版）
+// プロンプト設定（のっぺり2Dパステル・絵本風・背景あり版）
 // ===========================
 
-// 共通スタイル
-// ※「miniature diorama」を強調し、背景をシンプルにして瓶にフォーカスさせます。
-var SharedStyle = "anime style, 2D vector art, clean lines, cel shaded, vibrant pastel colors. straight-on front view, perfect centered composition, a single symmetrical glass bottle in the exact center. Background: simple blurred soft magical forest, depth of field."
+// 共通スタイル（ここで「リアルさ」を完全に排除し、のっぺりした2Dイラストに固定します）
+// "no 3D, no realistic shading" (3Dやリアルな影を禁止)
+// "children's book illustration" (絵本風) を入れてキッズ感を出します。
+var SharedStyle = "flat 2D vector illustration, children's book art style, anime cel shading, flat pastel colors, clean outlines, no strong shadows, no 3D rendering. The main subject is a large glass bottle in the center. Background: a beautiful flat 2D illustration of a green magical forest and subtle ancient ruins, not blurred."
 
 // レベル 1: 始まりの瓶
-// 「ちびマスコット」をやめ、「とても小さな可愛いアニメ調のウサギ」に変更
-var Stage1Prompt = "A simple clear glass bottle sealed with a plain cork. Inside the glass bottle is a miniature landscape diorama: a tiny green sprout growing from soil, and one very small cute cartoon white rabbit resting. The focus is on the miniature terrarium."
+// 白ウサギを固定キャラにします。
+var Stage1Prompt = "A simple clear glass bottle. Inside the bottle: a tiny green sprout growing from soil, and a tiny cute white rabbit. Simple and peaceful."
 
 // レベル 2: 成長途中の魔法瓶
-var Stage2Prompt = "A decorative glass bottle with elegant gold filigree edges, sealed with a cork. Inside the glass bottle is a miniature landscape diorama: a young tree with lush leaves, glowing mushrooms, and one tiny cute cartoon red fox sitting under the tree. A small rainbow arcs inside the bottle."
+var Stage2Prompt = "A decorative glass bottle with simple gold frames. Inside the bottle: a young green tree, colorful flat flowers, and the same tiny cute white rabbit resting under the tree. A small rainbow."
 
 // レベル 3: 完成された究極の魔法瓶
-// 動物を詰め込みすぎず「ウサギとキツネ」の2匹に限定し、木を巨大化
-var Stage3Prompt = "A magnificent, heavily ornamented glass bottle encased in intricate gold frames. Inside the glass bottle is a highly detailed miniature landscape diorama: a massive ancient tree with glowing green leaves, large crystals, and two tiny cute animals (a white rabbit and a red fox) resting under the tree. A beautiful rainbow arcs inside the glass."
+var Stage3Prompt = "A magnificent glass bottle with intricate but flat 2D gold decorations. Inside the bottle: a massive ancient tree filling the space, magical flat crystals, and the same tiny cute white rabbit. A vibrant 2D rainbow arcs across the scene."
 
-// 季節の属性（ここはそのまま活かします）
+// 季節の属性（ここは2Dイラストにも綺麗に反映されます）
 var Seasons = []string{
 	"[Spring theme: blooming pink cherry blossoms, fresh light green leaves, pink and bright green tones]",
-	"[Summer theme: vibrant deep green foliage, bright sunlight, vivid colorful summer flowers, high contrast]",
-	"[Autumn theme: fiery red and golden orange leaves, falling autumn foliage, warm amber lighting]",
-	"[Winter theme: covered in sparkling white snow, icy frost crystals, cool magical blue lighting]",
+	"[Summer theme: vibrant deep green foliage, bright sunlight, vivid colorful summer flowers]",
+	"[Autumn theme: fiery red and golden orange leaves, falling autumn foliage, warm amber tones]",
+	"[Winter theme: covered in white snow, icy frost crystals, cool magical blue and white tones]",
 }
 
 func buildPrompt(stage, generation int) string {
