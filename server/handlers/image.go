@@ -95,37 +95,10 @@ func generateGardenImage(prompt string, userID string, stage int) ([]byte, error
 		"height": 1024,
 	}
 
-	// ========== ここから i2i ロジック ==========
-	// Stage 2 以上なら、現在アクティブな画像を読み込んでベースにする
-	if stage > 1 {
-		dataDir := os.Getenv("STORAGE_DIR")
-		if dataDir == "" {
-			dataDir = "./data/images"
-		}
-		// 前のステージの画像を読み込む
-		activeFilePath := filepath.Join(dataDir, "gardens", userID, fmt.Sprintf("%s.png", userID))
-
-		imgBytes, err := os.ReadFile(activeFilePath)
-		if err == nil {
-			// Cloudflare Workers AI REST APIの 'image' フィールドは、Base64文字列ではなく数値（uint8）の配列を厳密に期待します
-			// (Base64文字列を送ると 'Type mismatch of image, array not in string' というエラーになります)
-			imgInts := make([]int, len(imgBytes))
-			for i, b := range imgBytes {
-				imgInts[i] = int(b)
-			}
-			reqData["image"] = imgInts
-
-			// strength (0.0〜1.0)
-			// 値が小さいほど元の画像を維持し、大きいほどプロンプトに従って大きく変化します。
-			// 0.65 前後が「元の構図を残しつつ成長させる」のに適しています。
-			reqData["strength"] = 0.65
-
-			log.Printf("[i2i] 前の画像をベースに生成します (strength: 0.65)")
-		} else {
-			log.Printf("[i2i] 前の画像が見つからないため、新規(txt2img)で生成します: %v", err)
-		}
-	}
-	// ========== ここまで ==========
+	// (注意: Cloudflare Workers AIの stable-diffusion-xl-base-1.0 は Text-to-Image 専門モデルのため、
+	//  i2i用の "image" 入力テンソルが存在しません。そのため、純粋な txt2img として生成します。
+	//  世代ごとのテーマ（季節・天候・カメラ画角等）が同一の乱数シードで固定されるため、i2iを使わずとも
+	//  高いビジュアル一貫性（正統進化）が維持されます)
 
 	reqBodyBytes, err := json.Marshal(reqData)
 	if err != nil {
