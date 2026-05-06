@@ -14,31 +14,29 @@ import (
 )
 
 // ===========================
-// プロンプト設定（超詳細・パステル2D統一・スケール感徹底版）
+// プロンプト設定（パステル調・ドット絵指定）
 // ===========================
 
-// 共通スタイル（画質とテイストの完全固定）
-// ※「NO 3D」「NO realistic」などの否定語も混ぜ込み、絶対にリアルにならないように、かつ超高画質のパステル絵本風になるように長文で縛り付けています。
-var SharedStyle = "Masterpiece, ultra-detailed flat 2D vector illustration, children's picture book art style, cute anime aesthetic, entirely pastel color palette, soft and bright lighting, clean and bold outlines, absolutely completely flat colors, NO 3D rendering, NO realistic shading, NO cinematic lighting, NO photorealism. The composition is a straight-on front view, perfectly centered, showing the entire glass bottle. BACKGROUND: A fully drawn, beautiful, flat 2D illustration of a magical ancient forest with tall green trees and moss-covered stone ruins, drawn clearly and NOT blurred, perfectly matching the pastel picture book style."
+// 共通スタイル（リアル化を完全封殺し、16bitのパステルドット絵に強制）
+var SharedStyle = "cute pastel pixel art, 16-bit retro game style, pixelated, soft pastel color palette, completely flat, NO realistic, NO 3D, NO high resolution. straight-on front view, a single glass bottle perfectly centered. Background: pastel pixel art of a blurred magical forest."
 
 // レベル 1: 始まりの瓶
-// 「瓶の中に木があり、動物は極小サイズで木の周りにいる」ことを詳細に記述
-var Stage1Prompt = "A highly detailed, flat 2D anime-style illustration of a simple, clear glass bottle sealed with a plain wooden cork. INSIDE THE BOTTLE: A miniature ecosystem is contained within the glass. At the center of the bottle's interior stands a young sapling tree with fresh green leaves growing from a patch of rich brown soil. Gathered around the base of this sapling inside the bottle are several very small, cute, flat 2D animals, such as a tiny white rabbit and a little blue bird. The animals are drawn very small relative to the tree, emphasizing that this is a miniature landscape. Sparse grass and tiny pebbles surround the roots."
+// 文章を短くしてAIの混乱を防ぐ
+var Stage1Prompt = "A pixel art glass bottle with a cork. Inside the bottle: a tiny sprout growing in soil, and a tiny white rabbit sprite. simple miniature diorama."
 
 // レベル 2: 成長途中の魔法瓶
-// 木が成長し、動物の種類が増える
-var Stage2Prompt = "A highly detailed, flat 2D anime-style illustration of an elegant glass bottle decorated with simple gold filigree and sealed with a glowing cork. INSIDE THE BOTTLE: A thriving miniature ecosystem is contained within the glass. At the center of the bottle's interior stands a strong, growing tree with a large canopy of lush green leaves. Gathered peacefully around the roots of this tree inside the bottle is a diverse group of very small, cute, flat 2D animals, including a tiny white rabbit, a little red fox, and a small deer fawn. The animals are very small, looking up at the tree. The miniature ground is covered in dense green grass, colorful flat flowers, and small glowing red mushrooms. A beautiful, distinct rainbow arcs entirely inside the glass bottle."
+var Stage2Prompt = "A pixel art glass bottle with gold edges. Inside the bottle: a small green tree, glowing mushrooms, a tiny white rabbit sprite, and a red fox sprite. A pixel art rainbow inside."
 
 // レベル 3: 完成された究極の魔法瓶
-// 添付画像の「究極系」に寄せるため、要素を限界まで詰め込む
-var Stage3Prompt = "The ultimate, masterpiece flat 2D anime-style illustration of a divine, majestic glass bottle heavily encased in intricate gold ornaments, vines, and embedded jewels. INSIDE THE BOTTLE: A massive, incredibly dense miniature magical ecosystem is contained completely within the glass. At the center of the bottle's interior stands a colossal, ancient magical tree with thick, winding roots and a sprawling canopy of glowing leaves that fills the upper half of the bottle. Gathered happily around the base of this giant tree is a large community of very small, cute, flat 2D animals, including a tiny white rabbit, a red fox, a baby deer, a squirrel, and a tiny chubby green dragon. The animals are drawn extremely small to show the massive scale of the ancient tree. The ground is covered in glowing pink and blue crystals, giant magical mushrooms, and glowing fairies. A brilliant, vivid rainbow arcs completely inside the glass bottle."
+// 複雑な装飾の描写を減らし、木の成長と動物の集合に絞る
+var Stage3Prompt = "A majestic pixel art glass bottle. Inside the bottle: a giant magical tree filling the space, a tiny white rabbit sprite, a red fox sprite, and a deer sprite gathered under the tree. A pixel art rainbow inside."
 
-// 季節の属性（パステル調に合うように色味の指定を強化）
+// 季節の属性（ドット絵の色味に反映されるようシンプルに）
 var Seasons = []string{
-	"[Spring theme: blooming pink cherry blossoms, fresh pastel green leaves, pink and bright green tones]",
-	"[Summer theme: vibrant deep pastel green foliage, bright sunlight, vivid colorful summer flowers]",
-	"[Autumn theme: fiery pastel red and golden orange leaves, falling autumn foliage, warm amber tones]",
-	"[Winter theme: covered in white snow, icy frost crystals, cool magical pastel blue and white tones]",
+	"[Spring theme: pastel pink and light green pixels]",
+	"[Summer theme: bright pastel green and yellow pixels]",
+	"[Autumn theme: pastel orange and amber pixels]",
+	"[Winter theme: pastel blue and white frosty pixels]",
 }
 
 func buildPrompt(stage, generation int) string {
