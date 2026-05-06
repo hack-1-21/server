@@ -14,25 +14,25 @@ import (
 )
 
 // ===========================
-// プロンプト設定（ここを自由に書き換えてください！）
+// プロンプト設定（2Dファンタジーイラスト風）
 // ===========================
 
 // ベースとなる世界観（全ステージ共通）
-var BasePrompt = "A magical miniature world inside a glass bottle, fantasy art style, %s %s, photorealistic digital art"
+// 「flat 2d vector art」「clean lines」「cel shaded」を追加してイラスト調に固定します
+var BasePrompt = "Flat 2D vector art of a magical miniature world inside a glass bottle, clean lines, cel shaded, fantasy storybook illustration, vibrant colors, high contrast, %s %s background"
 
-// ステージ1のプロンプト
-// %s には「動物」、%d には「世代番号(generation)」が自動で入ります
-var Stage1Prompt = "a tiny sprouting seedling just emerging from the soil, %s exploring nearby, small wildflowers, soft fog, quiet and peaceful atmosphere, generation %d"
+// ステージ1のプロンプト（シンプルに芽吹きを強調）
+var Stage1Prompt = "a single tiny green sprout in the center, simple earth ground, %s watching the sprout, soft magical glow, minimalist background, generation %d"
 
-// ステージ2のプロンプト
-var Stage2Prompt = "a growing tree with lush green leaves, %s living in harmony, a rainbow arching over the scene, warm sunlight streaming through, vibrant and lively, generation %d"
+// ステージ2のプロンプト（少し賑やかに）
+var Stage2Prompt = "a healthy growing tree with round green canopy, a small rainbow inside the bottle, %s playing together, colorful flowers and grass, generation %d"
 
-// ステージ3のプロンプト
-var Stage3Prompt = "a magnificent ancient tree with glowing roots, %s in a thriving ecosystem, glowing fairies dancing, a brilliant shining rainbow, bursting with life and magic, generation %d"
+// ステージ3のプロンプト（画像のような豪華な完成形）
+var Stage3Prompt = "a magnificent ancient tree with thick canopy, glowing magical fairies, multiple rainbows, %s gathered around, crystals and mushrooms on the ground, legendary atmosphere, generation %d"
 
-// ランダム要素（世代ごとに固定・またはステージごとにランダム）
-var seasons = []string{"spring", "summer", "autumn", "winter"}
-var weathers = []string{"sunny", "misty", "rainy", "starry night", "golden hour"}
+// ランダム要素（イラストに合う色調に変更）
+var seasons = []string{"pastel spring", "vibrant summer", "warm autumn", "cool winter"}
+var weathers = []string{"clear sunny", "mystical misty", "sparkling", "starry", "twilight"}
 var animals1 = []string{"a tiny rabbit", "a small deer fawn", "a hedgehog", "a baby fox"}
 var animals2 = []string{"rabbits and deer", "foxes and owls", "deer and hedgehogs", "fireflies and frogs"}
 var animals3 = []string{"foxes, deer, rabbits, owls, and fireflies", "wolves, deer, bears, and fairies", "unicorns, rabbits, foxes, and butterflies"}
@@ -84,8 +84,8 @@ func generateGardenImage(prompt string) ([]byte, error) {
 	// リクエストボディ: プロンプトと画像サイズ（縦長 9:16 に設定）
 	reqData := map[string]interface{}{
 		"prompt": prompt,
-		"width":  768,
-		"height": 1024,
+		"width":  512,
+		"height": 512,
 	}
 	reqBodyBytes, err := json.Marshal(reqData)
 	if err != nil {
