@@ -197,7 +197,8 @@ func TestCloudflareDebug(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	imgData, err := generateGardenImage("a tiny rabbit in a beautiful magical garden, photorealistic")
+	// 第2引数: userID (デバッグ用ダミー), 第3引数: stage=1 (i2iを使用せずtxt2imgでテスト)
+	imgData, err := generateGardenImage("a tiny rabbit in a beautiful magical garden, photorealistic", "debug-test-user", 1)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Cloudflare API エラー: %v", err))
 		return
