@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -13,9 +14,23 @@ import (
 )
 
 // ===========================
-// プロンプト生成
+// プロンプト設定（ここを自由に書き換えてください！）
 // ===========================
 
+// ベースとなる世界観（全ステージ共通）
+var BasePrompt = "A magical miniature world inside a glass bottle, fantasy art style, %s %s, photorealistic digital art"
+
+// ステージ1のプロンプト
+// %s には「動物」、%d には「世代番号(generation)」が自動で入ります
+var Stage1Prompt = "a tiny sprouting seedling just emerging from the soil, %s exploring nearby, small wildflowers, soft fog, quiet and peaceful atmosphere, generation %d"
+
+// ステージ2のプロンプト
+var Stage2Prompt = "a growing tree with lush green leaves, %s living in harmony, a rainbow arching over the scene, warm sunlight streaming through, vibrant and lively, generation %d"
+
+// ステージ3のプロンプト
+var Stage3Prompt = "a magnificent ancient tree with glowing roots, %s in a thriving ecosystem, glowing fairies dancing, a brilliant shining rainbow, bursting with life and magic, generation %d"
+
+// ランダム要素（世代ごとに固定・またはステージごとにランダム）
 var seasons = []string{"spring", "summer", "autumn", "winter"}
 var weathers = []string{"sunny", "misty", "rainy", "starry night", "golden hour"}
 var animals1 = []string{"a tiny rabbit", "a small deer fawn", "a hedgehog", "a baby fox"}
@@ -23,40 +38,27 @@ var animals2 = []string{"rabbits and deer", "foxes and owls", "deer and hedgehog
 var animals3 = []string{"foxes, deer, rabbits, owls, and fireflies", "wolves, deer, bears, and fairies", "unicorns, rabbits, foxes, and butterflies"}
 
 func buildPrompt(stage, generation int) string {
-	// 季節・天候は「世代（generation）」をシードにして固定する
-	// → 同じ世代のStage 1・2・3で必ず同じ季節・天候になる
-	// → 世代が変わると異なるテーマになる
+	// 季節・天候は「世代（generation）」をシードにして固定
 	genRand := rand.New(rand.NewSource(int64(generation * 1234567)))
 	season := seasons[genRand.Intn(len(seasons))]
 	weather := weathers[genRand.Intn(len(weathers))]
 
-	// 動物はステージごとに毎回ランダム（同じ世代でもStageごとに違う動物）
+	// 動物は毎回ランダム
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	base := fmt.Sprintf(
-		"A magical miniature world inside a glass bottle, fantasy art style, %s %s, ",
-		season, weather,
-	)
+	// ベースプロンプトを構築
+	base := fmt.Sprintf(BasePrompt+", ", season, weather)
 
 	switch stage {
 	case 1:
 		animal := animals1[r.Intn(len(animals1))]
-		return base + fmt.Sprintf(
-			"a tiny sprouting seedling just emerging from the soil, %s exploring nearby, small wildflowers, soft fog, quiet and peaceful atmosphere, generation %d, photorealistic digital art",
-			animal, generation,
-		)
+		return base + fmt.Sprintf(Stage1Prompt, animal, generation)
 	case 2:
 		animal := animals2[r.Intn(len(animals2))]
-		return base + fmt.Sprintf(
-			"a growing tree with lush green leaves, %s living in harmony, a rainbow arching over the scene, warm sunlight streaming through, vibrant and lively, generation %d, photorealistic digital art",
-			animal, generation,
-		)
+		return base + fmt.Sprintf(Stage2Prompt, animal, generation)
 	case 3:
 		animal := animals3[r.Intn(len(animals3))]
-		return base + fmt.Sprintf(
-			"a magnificent ancient tree with glowing roots, %s in a thriving ecosystem, glowing fairies dancing, a brilliant shining rainbow, bursting with life and magic, generation %d, photorealistic digital art",
-			animal, generation,
-		)
+		return base + fmt.Sprintf(Stage3Prompt, animal, generation)
 	default:
 		return base + "a magical garden in full bloom"
 	}
@@ -79,10 +81,18 @@ func generateGardenImage(prompt string) ([]byte, error) {
 		accountID,
 	)
 
-	// リクエストボディ: {"prompt": "..."}
-	reqBodyJSON := fmt.Sprintf(`{"prompt": %q}`, prompt)
+	// リクエストボディ: プロンプトと画像サイズ（縦長 9:16 に設定）
+	reqData := map[string]interface{}{
+		"prompt": prompt,
+		"width":  576,
+		"height": 1024,
+	}
+	reqBodyBytes, err := json.Marshal(reqData)
+	if err != nil {
+		return nil, fmt.Errorf("JSONエンコード失敗: %w", err)
+	}
 
-	req, err := http.NewRequest("POST", endpoint, bytes.NewBufferString(reqBodyJSON))
+	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(reqBodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("リクエスト生成失敗: %w", err)
 	}
