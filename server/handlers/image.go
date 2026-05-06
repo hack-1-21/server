@@ -81,7 +81,7 @@ func generateGardenImage(prompt string) ([]byte, error) {
 		accountID,
 	)
 
-	// リクエストボディ: プロンプトと画像サイズ（縦長 9:16 に設定）
+	// リクエストボディ: プロンプトと画像サイズ（1:1 に設定）
 	reqData := map[string]interface{}{
 		"prompt": prompt,
 		"width":  512,
