@@ -108,9 +108,9 @@ func generateGardenImage(prompt string, userID string, stage int) ([]byte, error
 
 		imgBytes, err := os.ReadFile(activeFilePath)
 		if err == nil {
-			// Cloudflare Workers AI に画像を渡すため、Base64エンコード文字列を使用する
-			// json配列([]int)だとデータ量が巨大になりすぎてエラー(Payload Too Largeやメモリ不足)になるため
-			reqData["image_b64"] = base64.StdEncoding.EncodeToString(imgBytes)
+			// Cloudflare Workers AI REST API は、"image" フィールドに Base64 エンコード文字列を受け取ります
+			// ("image_b64" ではなく "image" フィールドに文字列を渡すのがREST APIの仕様です)
+			reqData["image"] = base64.StdEncoding.EncodeToString(imgBytes)
 
 			// strength (0.0〜1.0)
 			// 値が小さいほど元の画像を維持し、大きいほどプロンプトに従って大きく変化します。
