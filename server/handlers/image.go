@@ -14,34 +14,33 @@ import (
 )
 
 // ===========================
-// プロンプト設定（季節ランダム・構図固定版）
+// プロンプト設定（デフォルメ動物・構図固定版）
 // ===========================
 
-// 共通するスタイル・背景定義
-// ※動物（ウサギなど）を削除し、「straight-on front view, perfect centered composition（真正面からの完全な中央構図）」を追加してブレを極力防ぎます。
-var SharedStyle = "anime style, detailed vector art, pastel color palette, soft magical lighting, whimsical atmosphere, straight-on front view, perfect centered composition, single symmetrical glass bottle in the center. Background: deep ancient forest, moss-covered Greek-style stone temple ruins in the distance, ancient stone stele with Nordic runes on both sides."
+// 共通するスタイル・構図定義
+// chibi, kawaii, mascot-like を追加し、全体を可愛いイラスト調に寄せています。
+// 背景（Background）は瓶の中身を際立たせるため、あえてシンプルに（ぼやけた魔法の森）しました。
+var SharedStyle = "anime style, 2D vector art, clean lines, cel shaded, vibrant pastel colors, chibi kawaii aesthetic. straight-on front view, perfect centered composition, a single symmetrical glass bottle in the exact center. Background: blurred soft magical forest."
 
 // レベル 1: 始まりの瓶
-var Stage1Prompt = "A detailed anime-style illustration of a simple, clear glass bottle sealed with a plain cork. A faint, wispy magical vapor rises from the cork. Inside the bottle, there is a miniature terrarium with a central young tree, growing from a patch of soil. The ground has sparse grass, a few small flowers, and scattered grey pebbles. A tiny, subtle rainbow arcs over the soil."
+var Stage1Prompt = "A simple clear glass bottle sealed with a plain cork. Inside the bottle: a miniature terrarium with a tiny green sprout growing from a patch of brown soil. A tiny, cute, chibi mascot rabbit is sleeping next to the sprout. Soft lighting."
 
 // レベル 2: 成長途中の魔法瓶
-var Stage2Prompt = "A magnificent anime-style illustration of a decorative glass bottle with elegant gold ornate frames and filigree. It is sealed with a cork adorned with a gem. The bottle emits a vibrant glowing aura. Inside, a lush central tree stands amidst a rich garden with glowing crystals, mushrooms, and lush grass. Tiny winged fairies and glowing motes fly around the tree. A prominent small rainbow arcs over the landscape inside the glass."
+var Stage2Prompt = "A decorative glass bottle with elegant gold filigree edges, sealed with a cork. Inside the bottle: a healthy young tree with lush leaves, surrounded by small glowing mushrooms and colorful flowers. A chibi kawaii rabbit and a tiny round chibi fox mascot are playing peacefully under the tree. A small rainbow arcs inside the bottle."
 
 // レベル 3: 完成された究極の魔法瓶
-var Stage3Prompt = "The ultimate anime-style illustration of a divine, heavily ornamented glass bottle. The entire bottle is encased in intricate gold filigree set with large gems, resting on a luxurious decorated base with intertwined vines. From the bottle’s neck, a colossal, brilliant rainbow arcs outwards into the forest. Inside the terrarium, life is incredibly dense: a massive central ancient tree surrounded by diverse flowers, large crystals, and mushrooms. Countless fairies and glowing magical particles create a dazzling, mystical spectacle. A second, smaller rainbow is visible inside the bottle."
+var Stage3Prompt = "A magnificent, heavily ornamented glass bottle encased in intricate gold and jewel-studded frames. Inside the bottle: a massive ancient tree with thick branches and glowing green leaves, surrounded by large glowing crystals and magical flowers. A group of chibi kawaii mascot animals (a rabbit, a fox, and a tiny chubby green dragon) are gathered happily under the tree. Glowing fairies floating around. A beautiful rainbow arcs inside the glass."
 
 // 季節の属性（世代ごとにランダムで決定される）
-// 景色や色合いに強く影響を与えるようにテーマ化しています。
 var Seasons = []string{
-	"[Spring theme: blooming pink cherry blossoms, fresh green leaves, gentle warm breeze, pink and bright green tones]",
-	"[Summer theme: vibrant deep green foliage, glowing bright sunlight, vivid colorful summer flowers, high contrast]",
+	"[Spring theme: blooming pink cherry blossoms, fresh light green leaves, pink and bright green tones]",
+	"[Summer theme: vibrant deep green foliage, bright sunlight, vivid colorful summer flowers, high contrast]",
 	"[Autumn theme: fiery red and golden orange leaves, falling autumn foliage, warm amber lighting]",
-	"[Winter theme: covered in sparkling white snow, icy frost crystals, cool magical blue lighting, glowing ice]",
+	"[Winter theme: covered in sparkling white snow, icy frost crystals, cool magical blue lighting]",
 }
 
 func buildPrompt(stage, generation int) string {
-	// 世代（generation）をシード値にして季節を決定
-	// これにより、同じ世代（例：第1世代）の成長中（Stage1〜3）は季節が途中で変わらないようになります
+	// 世代をシード値にして季節を決定
 	genRand := rand.New(rand.NewSource(int64(generation * 12345)))
 	season := Seasons[genRand.Intn(len(Seasons))]
 
@@ -54,11 +53,10 @@ func buildPrompt(stage, generation int) string {
 	case 3:
 		base = Stage3Prompt
 	default:
-		base = Stage3Prompt // 想定外の数値が来たら最終形態にする
+		base = Stage3Prompt 
 	}
 
-	// 最終的なプロンプトの組み立て: 
-	// [ベースとなる瓶と木の状態] + [季節の属性] + [共通のスタイルと背景]
+	// 最終的なプロンプトの組み立て
 	return fmt.Sprintf("%s %s %s", base, season, SharedStyle)
 }
 
