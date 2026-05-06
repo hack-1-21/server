@@ -108,9 +108,13 @@ func generateGardenImage(prompt string, userID string, stage int) ([]byte, error
 
 		imgBytes, err := os.ReadFile(activeFilePath)
 		if err == nil {
-			// Cloudflare Workers AI REST API は、"image" フィールドに Base64 エンコード文字列を受け取ります
-			// ("image_b64" ではなく "image" フィールドに文字列を渡すのがREST APIの仕様です)
-			reqData["image"] = base64.StdEncoding.EncodeToString(imgBytes)
+			// Cloudflare Workers AI REST APIの 'image' フィールドは、Base64文字列ではなく数値（uint8）の配列を厳密に期待します
+			// (Base64文字列を送ると 'Type mismatch of image, array not in string' というエラーになります)
+			imgInts := make([]int, len(imgBytes))
+			for i, b := range imgBytes {
+				imgInts[i] = int(b)
+			}
+			reqData["image"] = imgInts
 
 			// strength (0.0〜1.0)
 			// 値が小さいほど元の画像を維持し、大きいほどプロンプトに従って大きく変化します。
