@@ -14,24 +14,25 @@ import (
 )
 
 // ===========================
-// プロンプト設定（デフォルメ動物・構図固定版）
+// プロンプト設定（ジオラマ強制・サイズ修正版）
 // ===========================
 
-// 共通するスタイル・構図定義
-// chibi, kawaii, mascot-like を追加し、全体を可愛いイラスト調に寄せています。
-// 背景（Background）は瓶の中身を際立たせるため、あえてシンプルに（ぼやけた魔法の森）しました。
-var SharedStyle = "anime style, 2D vector art, clean lines, cel shaded, vibrant pastel colors, chibi kawaii aesthetic. straight-on front view, perfect centered composition, a single symmetrical glass bottle in the exact center. Background: blurred soft magical forest."
+// 共通スタイル
+// ※「miniature diorama」を強調し、背景をシンプルにして瓶にフォーカスさせます。
+var SharedStyle = "anime style, 2D vector art, clean lines, cel shaded, vibrant pastel colors. straight-on front view, perfect centered composition, a single symmetrical glass bottle in the exact center. Background: simple blurred soft magical forest, depth of field."
 
 // レベル 1: 始まりの瓶
-var Stage1Prompt = "A simple clear glass bottle sealed with a plain cork. Inside the bottle: a miniature terrarium with a tiny green sprout growing from a patch of brown soil. A tiny, cute, chibi mascot rabbit is sleeping next to the sprout. Soft lighting."
+// 「ちびマスコット」をやめ、「とても小さな可愛いアニメ調のウサギ」に変更
+var Stage1Prompt = "A simple clear glass bottle sealed with a plain cork. Inside the glass bottle is a miniature landscape diorama: a tiny green sprout growing from soil, and one very small cute cartoon white rabbit resting. The focus is on the miniature terrarium."
 
 // レベル 2: 成長途中の魔法瓶
-var Stage2Prompt = "A decorative glass bottle with elegant gold filigree edges, sealed with a cork. Inside the bottle: a healthy young tree with lush leaves, surrounded by small glowing mushrooms and colorful flowers. A chibi kawaii rabbit and a tiny round chibi fox mascot are playing peacefully under the tree. A small rainbow arcs inside the bottle."
+var Stage2Prompt = "A decorative glass bottle with elegant gold filigree edges, sealed with a cork. Inside the glass bottle is a miniature landscape diorama: a young tree with lush leaves, glowing mushrooms, and one tiny cute cartoon red fox sitting under the tree. A small rainbow arcs inside the bottle."
 
 // レベル 3: 完成された究極の魔法瓶
-var Stage3Prompt = "A magnificent, heavily ornamented glass bottle encased in intricate gold and jewel-studded frames. Inside the bottle: a massive ancient tree with thick branches and glowing green leaves, surrounded by large glowing crystals and magical flowers. A group of chibi kawaii mascot animals (a rabbit, a fox, and a tiny chubby green dragon) are gathered happily under the tree. Glowing fairies floating around. A beautiful rainbow arcs inside the glass."
+// 動物を詰め込みすぎず「ウサギとキツネ」の2匹に限定し、木を巨大化
+var Stage3Prompt = "A magnificent, heavily ornamented glass bottle encased in intricate gold frames. Inside the glass bottle is a highly detailed miniature landscape diorama: a massive ancient tree with glowing green leaves, large crystals, and two tiny cute animals (a white rabbit and a red fox) resting under the tree. A beautiful rainbow arcs inside the glass."
 
-// 季節の属性（世代ごとにランダムで決定される）
+// 季節の属性（ここはそのまま活かします）
 var Seasons = []string{
 	"[Spring theme: blooming pink cherry blossoms, fresh light green leaves, pink and bright green tones]",
 	"[Summer theme: vibrant deep green foliage, bright sunlight, vivid colorful summer flowers, high contrast]",
@@ -40,7 +41,6 @@ var Seasons = []string{
 }
 
 func buildPrompt(stage, generation int) string {
-	// 世代をシード値にして季節を決定
 	genRand := rand.New(rand.NewSource(int64(generation * 12345)))
 	season := Seasons[genRand.Intn(len(Seasons))]
 
@@ -56,7 +56,6 @@ func buildPrompt(stage, generation int) string {
 		base = Stage3Prompt 
 	}
 
-	// 最終的なプロンプトの組み立て
 	return fmt.Sprintf("%s %s %s", base, season, SharedStyle)
 }
 
