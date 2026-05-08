@@ -146,9 +146,11 @@ func generateGardenImage(prompt string, userID string, stage int) ([]byte, error
 				"prompt":   prompt,
 				"image":    imgInts,
 				"strength": 0.65, // 元画像（ボトルの構図など）をどの程度残すか（0.0〜1.0）
+				"width":    1024,
+				"height":   1024,
 			}
 			isImg2Img = true
-			log.Printf("[Cloudflare i2i] 前の画像をベースにSD1.5-img2imgで生成します (strength: 0.65)")
+			log.Printf("[Cloudflare i2i] 前の画像をベースにSD1.5-img2img（1024x1024）で生成します (strength: 0.65)")
 		} else {
 			log.Printf("[Cloudflare i2i] 前の画像が見つからないため、新規(SDXL txt2img)で生成します: %v", err)
 		}
