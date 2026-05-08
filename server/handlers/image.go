@@ -13,49 +13,96 @@ import (
 	"time"
 )
 
-// ===========================
-// プロンプト設定（パステル調・ドット絵指定）
-// ===========================
+// ==========================================================================
+// 1. 各属性ごとの進化プロンプト設定 (★英語プロンプトを直接コピペ・カスタマイズできるエリア★)
+// ==========================================================================
 
-// 共通スタイル（リアル化を完全封殺し、16bitのパステルドット絵に強制）
-var SharedStyle = "cute pastel pixel art, 16-bit retro game style, pixelated, soft pastel color palette, completely flat, NO realistic, NO 3D, NO high resolution. straight-on front view, a single glass bottle perfectly centered. Background: pastel pixel art of a blurred magical forest."
+// 【共通スタイル / BASE STYLE】
+// 画角、容器、全体テイスト（アンティーク魔法瓶、リヴリーアイランド/ポケモンSleep/Duolingo風のシンプルでフラットな質感、英語文字無し）を規定します。
+var BasePrompt = "straight-on front view, perfect centered composition, a single symmetrical glass potion bottle in the exact center, the entire bottle is fully visible, shaped like an otherworldly antique magical perfume bottle with elegant decorations, flat simple illustration, cozy game art style similar to Livly Island, Duolingo, and Pokemon Sleep, no text, no words, no letters"
 
-// レベル 1: 始まりの瓶
-// 文章を短くしてAIの混乱を防ぐ
-var Stage1Prompt = "A pixel art glass bottle with a cork. Inside the bottle: a tiny sprout growing in soil, and a tiny white rabbit sprite. simple miniature diorama."
+// --- 🌱 【草属性 / GRASS】 (第1世代, 第5世代, ...) ---
+// 朝露に濡れた草花、絡んだつる、美しい木、草原、可憐な動物、背景は森奥深くのうっそうとした神殿、中央に成長する木
+var GrassStage1 = "inside the magical bottle: a small patch of rich soil, a tiny sprouting green seedling in the exact center, morning dew on small grass and wildflowers, a small adorable forest animal, fantasy, glittering, beautiful, background is a deep mystical ancient forest temple with dense untouched trees, no man-made objects inside"
+var GrassStage2 = "inside the magical bottle: a beautiful young growing tree in the exact center, tangled vines, vibrant green grasslands, small cute forest animals playing, a beautiful colorful rainbow in the background, fantasy, glittering, beautiful, deep mystical ancient forest temple backdrop with dense untouched trees"
+var GrassStage3 = "inside the magical bottle: a magnificent giant ancient tree in the exact center, lush green leaves, beautiful blooming wildflowers, cute forest animals gathered under the tree, brilliant glowing rainbow, fantasy, glittering, beautiful, deep mystical ancient forest temple backdrop with dense untouched trees"
 
-// レベル 2: 成長途中の魔法瓶
-var Stage2Prompt = "A pixel art glass bottle with gold edges. Inside the bottle: a small green tree, glowing mushrooms, a tiny white rabbit sprite, and a red fox sprite. A pixel art rainbow inside."
+// --- 🔥 【炎属性 / FIRE】 (第2世代, 第6世代, ...) ---
+// (コピペエリア: ここにお好きな英語プロンプトを直接上書き貼り付けしてください！)
+var FireStage1 = "inside the magical bottle: a small patch of warm volcanic ash, a tiny glowing fiery sprout in the exact center, warm sparks, a small adorable fire-themed animal, fantasy, glittering, beautiful, background is a legendary volcanic temple with glowing basalt stone, no man-made objects inside"
+var FireStage2 = "inside the magical bottle: a beautiful young growing tree made of glowing branches and fiery leaves in the exact center, rising warm sparks, warm embers, young fire spirits playing, a beautiful warm heatwave rainbow, fantasy, glittering, beautiful, legendary volcanic temple backdrop"
+var FireStage3 = "inside the magical bottle: a magnificent giant ancient tree made of burning golden leaves and glowing roots in the exact center, soaring phoenix, glowing warm crystals, fantasy, glittering, beautiful, legendary volcanic temple backdrop"
 
-// レベル 3: 完成された究極の魔法瓶
-// 複雑な装飾の描写を減らし、木の成長と動物の集合に絞る
-var Stage3Prompt = "A majestic pixel art glass bottle. Inside the bottle: a giant magical tree filling the space, a tiny white rabbit sprite, a red fox sprite, and a deer sprite gathered under the tree. A pixel art rainbow inside."
+// --- 💧 【水属性 / WATER】 (第3世代, 第7世代, ...) ---
+// (コピペエリア: ここにお好きな英語プロンプトを直接上書き貼り付けしてください！)
+var WaterStage1 = "inside the magical bottle: a small pool of crystal clear water, a tiny glowing aquatic seedling in the exact center, floating water droplets, a small adorable water-themed animal, fantasy, glittering, beautiful, background is a sunken water temple with beautiful ancient coral, no man-made objects inside"
+var WaterStage2 = "inside the magical bottle: a beautiful young growing tree made of flowing water currents in the exact center, beautiful coral reefs, young water spirits playing, a beautiful watery rainbow, fantasy, glittering, beautiful, sunken water temple backdrop"
+var WaterStage3 = "inside the magical bottle: a magnificent giant ancient coral tree in the exact center, glowing water currents, cute aquatic creatures gathered, brilliant glowing water rainbow, fantasy, glittering, beautiful, sunken water temple backdrop"
 
-// 季節の属性（ドット絵の色味に反映されるようシンプルに）
-var Seasons = []string{
-	"[Spring theme: pastel pink and light green pixels]",
-	"[Summer theme: bright pastel green and yellow pixels]",
-	"[Autumn theme: pastel orange and amber pixels]",
-	"[Winter theme: pastel blue and white frosty pixels]",
-}
+// --- ✨ 【光属性 / LIGHT】 (第4世代, 第8世代, ...) ---
+// (コピペエリア: ここにお好きな英語プロンプトを直接上書き貼り付けしてください！)
+var LightStage1 = "inside the magical bottle: a small patch of glowing celestial dust, a tiny bright glowing seedling in the exact center, soft floating sunbeams, a small adorable light-themed creature, fantasy, glittering, beautiful, background is a celestial sun temple with floating ruins, no man-made objects inside"
+var LightStage2 = "inside the magical bottle: a beautiful young growing tree made of pure golden light and shimmering leaves in the exact center, pillars of soft morning sunlight, young light fairies playing, a brilliant solar rainbow, fantasy, glittering, beautiful, celestial sun temple backdrop"
+var LightStage3 = "inside the magical bottle: a magnificent giant ancient tree radiating warm golden light in the exact center, shimmering stars, glowing angelic wings, fantasy, glittering, beautiful, celestial sun temple backdrop"
 
 func buildPrompt(stage, generation int) string {
-	genRand := rand.New(rand.NewSource(int64(generation * 12345)))
-	season := Seasons[genRand.Intn(len(Seasons))]
-
-	var base string
-	switch stage {
-	case 1:
-		base = Stage1Prompt
-	case 2:
-		base = Stage2Prompt
-	case 3:
-		base = Stage3Prompt
-	default:
-		base = Stage3Prompt 
+	// 4つの属性（草・炎・水・光）を世代(generation)ごとにトグル・ループさせます
+	// Gen 1 -> 草, Gen 2 -> 炎, Gen 3 -> 水, Gen 4 -> 光, Gen 5 -> 草 ...
+	attributeIndex := (generation - 1) % 4
+	if attributeIndex < 0 {
+		attributeIndex = 0
 	}
 
-	return fmt.Sprintf("%s %s %s", base, season, SharedStyle)
+	var stagePrompt string
+	switch attributeIndex {
+	case 0: // 草属性 (Grass)
+		switch stage {
+		case 1:
+			stagePrompt = GrassStage1
+		case 2:
+			stagePrompt = GrassStage2
+		case 3:
+			stagePrompt = GrassStage3
+		default:
+			stagePrompt = GrassStage3
+		}
+	case 1: // 炎属性 (Fire)
+		switch stage {
+		case 1:
+			stagePrompt = FireStage1
+		case 2:
+			stagePrompt = FireStage2
+		case 3:
+			stagePrompt = FireStage3
+		default:
+			stagePrompt = FireStage3
+		}
+	case 2: // 水属性 (Water)
+		switch stage {
+		case 1:
+			stagePrompt = WaterStage1
+		case 2:
+			stagePrompt = WaterStage2
+		case 3:
+			stagePrompt = WaterStage3
+		default:
+			stagePrompt = WaterStage3
+		}
+	case 3: // 光属性 (Light)
+		switch stage {
+		case 1:
+			stagePrompt = LightStage1
+		case 2:
+			stagePrompt = LightStage2
+		case 3:
+			stagePrompt = LightStage3
+		default:
+			stagePrompt = LightStage3
+		}
+	}
+
+	// 共通基本スタイル（魔法瓶やDuolingo/Pokemon Sleep等の画角・スタイル）とステージプロンプトを連結
+	return fmt.Sprintf("%s, %s", BasePrompt, stagePrompt)
 }
 
 // ===========================
