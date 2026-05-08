@@ -145,7 +145,7 @@ func generateGardenImage(prompt string, userID string, stage int) ([]byte, error
 			reqData = map[string]interface{}{
 				"prompt":   prompt,
 				"image":    imgInts,
-				"strength": 0.65, // 元画像（ボトルの構図など）をどの程度残すか（0.0〜1.0）
+				"strength": 0.30, // 元画像（ボトルの構図など）をどの程度残すか（0.0〜1.0）
 				"width":    1024,
 				"height":   1024,
 			}
