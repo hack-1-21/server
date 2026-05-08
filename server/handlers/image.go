@@ -116,7 +116,7 @@ func generateGardenImage(prompt string, userID string, stage int) ([]byte, error
 		return nil, fmt.Errorf("HF_API_TOKEN が環境変数に設定されていません。Hugging FaceのAPIトークンを登録してください。")
 	}
 
-	endpoint := "https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5"
+	endpoint := "https://api-inference.huggingface.co/models/stable-diffusion-v1-5/stable-diffusion-v1-5"
 
 	var reqData map[string]interface{}
 	isImg2Img := false
