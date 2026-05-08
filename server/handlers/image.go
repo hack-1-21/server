@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -104,35 +105,56 @@ func buildPrompt(stage, generation int) string {
 	return fmt.Sprintf("%s, %s", BasePrompt, stagePrompt)
 }
 
-// ===========================
-// Cloudflare Workers AI 呼び出し (i2i対応)
-// ===========================
+// ==========================================
+// Hugging Face Serverless Inference API 呼び出し (i2i対応)
+// ==========================================
 
-// 引数に userID と stage を追加し、以前の画像を取得できるようにします
+// 引数に userID と stage を用いて、前ステージの画像があれば Base64 にエンコードして i2i (Image-to-Image) を実行します
 func generateGardenImage(prompt string, userID string, stage int) ([]byte, error) {
-	accountID := os.Getenv("CF_ACCOUNT_ID")
-	apiToken := os.Getenv("CF_API_TOKEN")
-
-	if accountID == "" || apiToken == "" {
-		return nil, fmt.Errorf("CF_ACCOUNT_ID または CF_API_TOKEN が環境変数に設定されていません")
+	apiToken := os.Getenv("HF_API_TOKEN")
+	if apiToken == "" {
+		return nil, fmt.Errorf("HF_API_TOKEN が環境変数に設定されていません。Hugging FaceのAPIトークンを登録してください。")
 	}
 
-	endpoint := fmt.Sprintf(
-		"https://api.cloudflare.com/client/v4/accounts/%s/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0",
-		accountID,
-	)
+	endpoint := "https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5"
 
-	// リクエストボディ: プロンプトと画像サイズ（正方形 1:1 に設定）
-	reqData := map[string]interface{}{
-		"prompt": prompt,
-		"width":  1024,
-		"height": 1024,
+	var reqData map[string]interface{}
+	isImg2Img := false
+
+	// Stage 2 以上なら、現在アクティブな画像を読み込んでベースにする (Hugging Face img2img)
+	if stage > 1 {
+		dataDir := os.Getenv("STORAGE_DIR")
+		if dataDir == "" {
+			dataDir = "./data/images"
+		}
+		activeFilePath := filepath.Join(dataDir, "gardens", userID, fmt.Sprintf("%s.png", userID))
+
+		imgBytes, err := os.ReadFile(activeFilePath)
+		if err == nil {
+			base64Str := base64.StdEncoding.EncodeToString(imgBytes)
+			reqData = map[string]interface{}{
+				"inputs": "data:image/png;base64," + base64Str,
+				"parameters": map[string]interface{}{
+					"prompt":             prompt,
+					"strength":           0.65, // 元画像を残しつつ変化させる強度 (0.0〜1.0)
+					"guidance_scale":     7.5,
+					"num_inference_steps": 50,
+				},
+			}
+			isImg2Img = true
+			log.Printf("[HuggingFace i2i] 前の画像（Base64）をベースに生成します (strength: 0.65)")
+		} else {
+			log.Printf("[HuggingFace i2i] 前の画像が見つからないため、新規(txt2img)で生成します: %v", err)
+		}
 	}
 
-	// (注意: Cloudflare Workers AIの stable-diffusion-xl-base-1.0 は Text-to-Image 専門モデルのため、
-	//  i2i用の "image" 入力テンソルが存在しません。そのため、純粋な txt2img として生成します。
-	//  世代ごとのテーマ（季節・天候・カメラ画角等）が同一の乱数シードで固定されるため、i2iを使わずとも
-	//  高いビジュアル一貫性（正統進化）が維持されます)
+	if !isImg2Img {
+		// txt2img 用の標準ペイロード
+		reqData = map[string]interface{}{
+			"inputs": prompt,
+		}
+		log.Printf("[HuggingFace txt2img] 新規画像を生成します")
+	}
 
 	reqBodyBytes, err := json.Marshal(reqData)
 	if err != nil {
@@ -146,30 +168,28 @@ func generateGardenImage(prompt string, userID string, stage int) ([]byte, error
 	req.Header.Set("Authorization", "Bearer "+apiToken)
 	req.Header.Set("Content-Type", "application/json")
 
-	// 画像データが大きくなるため、タイムアウトを長めに設定
-	client := &http.Client{Timeout: 120 * time.Second}
+	// Hugging Face のコールドスタート対策として長めのタイムアウトを設定
+	client := &http.Client{Timeout: 180 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Cloudflare API 呼び出し失敗: %w", err)
+		return nil, fmt.Errorf("Hugging Face API 呼び出し失敗: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// 429: レートリミット
-	if resp.StatusCode == http.StatusTooManyRequests {
-		return nil, fmt.Errorf("Cloudflare API レートリミット超過 (429): しばらく待ってから再試行してください")
-	}
-	// 401/403: 認証エラー
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+	// 503: モデルロード中（コールドスタート）
+	if resp.StatusCode == http.StatusServiceUnavailable {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Cloudflare API 認証エラー (%d): %s", resp.StatusCode, string(body))
+		log.Printf("[Hugging Face] モデルロード中 (503): %s", string(body))
+		return nil, fmt.Errorf("Hugging Faceのモデルがロード中です（約1分かかる場合があります）。数秒後に再試行してください: %s", string(body))
 	}
+
 	// その他エラー
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Cloudflare API エラー %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("Hugging Face API エラー %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Cloudflare Workers AI はバイナリ（PNG/JPEG）をそのまま返す
+	// Hugging Face Inference API は生成されたバイナリ（PNG/JPEG等）をそのまま返します
 	imgData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("レスポンス読み込み失敗: %w", err)
