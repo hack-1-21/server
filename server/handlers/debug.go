@@ -57,6 +57,83 @@ type DebugDeleteMeasurementsRequest struct {
 	SWLng  float64 `json:"sw_lng"`
 }
 
+type DebugTokyoRandomMeasurementsRequest struct {
+	UserID string `json:"user_id"`
+	Count  int    `json:"count"`
+}
+
+type debugMeasurementCluster struct {
+	Name      string
+	Weight    int
+	CenterLat float64
+	CenterLng float64
+	RadiusLat float64
+	RadiusLng float64
+	MinDB     float64
+	MaxDB     float64
+}
+
+func userExists(userID string) (bool, error) {
+	var exists bool
+	err := db.DB.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM users WHERE user_id = $1)`,
+		userID,
+	).Scan(&exists)
+	return exists, err
+}
+
+func insertDebugMeasurements(req DebugBulkMeasurementsRequest) (int, error) {
+	var insertQuery string
+	if req.Shape == "box" {
+		insertQuery = `WITH inserted AS (
+			INSERT INTO measurements (user_id, db, hz, latitude, longitude, created_at)
+			SELECT
+				$1,
+				$7::double precision + random() * ($8::double precision - $7::double precision),
+				100 + random() * 4900,
+				$3::double precision + (random() - 0.5) * 2 * $5::double precision,
+				$4::double precision + (random() - 0.5) * 2 * $6::double precision,
+				NOW() - (random() * interval '7 days')
+			FROM generate_series(1, $2::integer)
+			RETURNING id
+		)
+		SELECT COUNT(*) FROM inserted`
+	} else {
+		insertQuery = `WITH inserted AS (
+			INSERT INTO measurements (user_id, db, hz, latitude, longitude, created_at)
+			SELECT
+				$1,
+				$7::double precision + random() * ($8::double precision - $7::double precision),
+				100 + random() * 4900,
+				$3::double precision + sin(v.theta) * v.rho * $5::double precision,
+				$4::double precision + cos(v.theta) * v.rho * $6::double precision,
+				NOW() - (random() * interval '7 days')
+			FROM generate_series(1, $2::integer)
+			CROSS JOIN LATERAL (
+				SELECT
+					random() * 6.283185307179586 AS theta,
+					sqrt(random()) * random() AS rho
+			) v
+			RETURNING id
+		)
+		SELECT COUNT(*) FROM inserted`
+	}
+
+	var inserted int
+	err := db.DB.QueryRow(
+		insertQuery,
+		req.UserID,
+		req.Count,
+		req.CenterLat,
+		req.CenterLng,
+		req.RadiusLat,
+		req.RadiusLng,
+		req.MinDB,
+		req.MaxDB,
+	).Scan(&inserted)
+	return inserted, err
+}
+
 // DebugBulkMeasurements POST /debug/measurements/bulk
 // マップ表示確認用に、指定ユーザーの測定データを中心座標周辺へ一括投入する
 func DebugBulkMeasurements(w http.ResponseWriter, r *http.Request) {
@@ -110,11 +187,8 @@ func DebugBulkMeasurements(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var exists bool
-	if err := db.DB.QueryRow(
-		`SELECT EXISTS (SELECT 1 FROM users WHERE user_id = $1)`,
-		req.UserID,
-	).Scan(&exists); err != nil {
+	exists, err := userExists(req.UserID)
+	if err != nil {
 		log.Printf("users EXISTS確認失敗: %v", err)
 		respondError(w, http.StatusInternalServerError, "ユーザー確認に失敗しました")
 		return
@@ -124,53 +198,7 @@ func DebugBulkMeasurements(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var inserted int
-	var insertQuery string
-	if req.Shape == "box" {
-		insertQuery = `WITH inserted AS (
-			INSERT INTO measurements (user_id, db, hz, latitude, longitude, created_at)
-			SELECT
-				$1,
-				$7::double precision + random() * ($8::double precision - $7::double precision),
-				100 + random() * 4900,
-				$3::double precision + (random() - 0.5) * 2 * $5::double precision,
-				$4::double precision + (random() - 0.5) * 2 * $6::double precision,
-				NOW() - (random() * interval '7 days')
-			FROM generate_series(1, $2::integer)
-			RETURNING id
-		)
-		SELECT COUNT(*) FROM inserted`
-	} else {
-		insertQuery = `WITH inserted AS (
-			INSERT INTO measurements (user_id, db, hz, latitude, longitude, created_at)
-			SELECT
-				$1,
-				$7::double precision + random() * ($8::double precision - $7::double precision),
-				100 + random() * 4900,
-				$3::double precision + sin(v.theta) * v.rho * $5::double precision,
-				$4::double precision + cos(v.theta) * v.rho * $6::double precision,
-				NOW() - (random() * interval '7 days')
-			FROM generate_series(1, $2::integer)
-			CROSS JOIN LATERAL (
-				SELECT
-					random() * 6.283185307179586 AS theta,
-					sqrt(random()) * random() AS rho
-			) v
-			RETURNING id
-		)
-		SELECT COUNT(*) FROM inserted`
-	}
-	err := db.DB.QueryRow(
-		insertQuery,
-		req.UserID,
-		req.Count,
-		req.CenterLat,
-		req.CenterLng,
-		req.RadiusLat,
-		req.RadiusLng,
-		req.MinDB,
-		req.MaxDB,
-	).Scan(&inserted)
+	inserted, err := insertDebugMeasurements(req)
 	if err != nil {
 		log.Printf("measurements bulk INSERT失敗: %v", err)
 		respondError(w, http.StatusInternalServerError, "測定データの一括投入に失敗しました")
@@ -188,6 +216,111 @@ func DebugBulkMeasurements(w http.ResponseWriter, r *http.Request) {
 		"min_db":     req.MinDB,
 		"max_db":     req.MaxDB,
 		"shape":      req.Shape,
+	})
+}
+
+// DebugTokyoRandomMeasurements POST /debug/measurements/tokyo-random
+// 東京全域の主要エリアへ自然な楕円クラスタをまとめて投入する
+func DebugTokyoRandomMeasurements(w http.ResponseWriter, r *http.Request) {
+	var req DebugTokyoRandomMeasurementsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "リクエスト形式が不正です")
+		return
+	}
+	if req.UserID == "" {
+		respondError(w, http.StatusBadRequest, "user_id は必須です")
+		return
+	}
+	if req.Count <= 0 {
+		req.Count = 30000
+	}
+	if req.Count > 150000 {
+		respondError(w, http.StatusBadRequest, "count は 150000 以下で指定してください")
+		return
+	}
+
+	exists, err := userExists(req.UserID)
+	if err != nil {
+		log.Printf("users EXISTS確認失敗: %v", err)
+		respondError(w, http.StatusInternalServerError, "ユーザー確認に失敗しました")
+		return
+	}
+	if !exists {
+		respondError(w, http.StatusNotFound, "指定されたユーザーが存在しません")
+		return
+	}
+
+	clusters := []debugMeasurementCluster{
+		{Name: "shinjuku", Weight: 9, CenterLat: 35.6896, CenterLng: 139.7006, RadiusLat: 0.010, RadiusLng: 0.011, MinDB: 82, MaxDB: 102},
+		{Name: "shibuya", Weight: 8, CenterLat: 35.6580, CenterLng: 139.7016, RadiusLat: 0.010, RadiusLng: 0.010, MinDB: 80, MaxDB: 100},
+		{Name: "ikebukuro", Weight: 8, CenterLat: 35.7295, CenterLng: 139.7109, RadiusLat: 0.010, RadiusLng: 0.010, MinDB: 78, MaxDB: 100},
+		{Name: "tokyo_station", Weight: 7, CenterLat: 35.6812, CenterLng: 139.7671, RadiusLat: 0.009, RadiusLng: 0.010, MinDB: 72, MaxDB: 92},
+		{Name: "shinagawa", Weight: 6, CenterLat: 35.6285, CenterLng: 139.7388, RadiusLat: 0.010, RadiusLng: 0.010, MinDB: 72, MaxDB: 92},
+		{Name: "ueno", Weight: 6, CenterLat: 35.7138, CenterLng: 139.7770, RadiusLat: 0.011, RadiusLng: 0.010, MinDB: 66, MaxDB: 84},
+		{Name: "akihabara", Weight: 6, CenterLat: 35.6984, CenterLng: 139.7730, RadiusLat: 0.008, RadiusLng: 0.009, MinDB: 76, MaxDB: 96},
+		{Name: "roppongi", Weight: 5, CenterLat: 35.6628, CenterLng: 139.7310, RadiusLat: 0.009, RadiusLng: 0.010, MinDB: 70, MaxDB: 92},
+		{Name: "ginza", Weight: 5, CenterLat: 35.6717, CenterLng: 139.7649, RadiusLat: 0.008, RadiusLng: 0.009, MinDB: 68, MaxDB: 88},
+		{Name: "odaiba", Weight: 4, CenterLat: 35.6300, CenterLng: 139.7750, RadiusLat: 0.014, RadiusLng: 0.016, MinDB: 54, MaxDB: 76},
+		{Name: "kitasenju", Weight: 4, CenterLat: 35.7490, CenterLng: 139.8048, RadiusLat: 0.012, RadiusLng: 0.012, MinDB: 62, MaxDB: 82},
+		{Name: "nakano", Weight: 4, CenterLat: 35.7060, CenterLng: 139.6657, RadiusLat: 0.012, RadiusLng: 0.012, MinDB: 58, MaxDB: 78},
+		{Name: "kichijoji", Weight: 4, CenterLat: 35.7031, CenterLng: 139.5796, RadiusLat: 0.013, RadiusLng: 0.014, MinDB: 54, MaxDB: 76},
+		{Name: "futakotamagawa", Weight: 3, CenterLat: 35.6115, CenterLng: 139.6264, RadiusLat: 0.012, RadiusLng: 0.013, MinDB: 50, MaxDB: 72},
+		{Name: "sumida", Weight: 4, CenterLat: 35.7101, CenterLng: 139.8107, RadiusLat: 0.012, RadiusLng: 0.013, MinDB: 58, MaxDB: 78},
+		{Name: "imperial_palace", Weight: 5, CenterLat: 35.6852, CenterLng: 139.7528, RadiusLat: 0.012, RadiusLng: 0.013, MinDB: 38, MaxDB: 56},
+		{Name: "yoyogi_park", Weight: 5, CenterLat: 35.6728, CenterLng: 139.6949, RadiusLat: 0.011, RadiusLng: 0.011, MinDB: 38, MaxDB: 56},
+		{Name: "shinjuku_gyoen", Weight: 4, CenterLat: 35.6852, CenterLng: 139.7100, RadiusLat: 0.009, RadiusLng: 0.010, MinDB: 36, MaxDB: 54},
+		{Name: "meiji_jingu", Weight: 4, CenterLat: 35.6764, CenterLng: 139.6993, RadiusLat: 0.010, RadiusLng: 0.010, MinDB: 36, MaxDB: 54},
+		{Name: "kasai_rinkai", Weight: 3, CenterLat: 35.6440, CenterLng: 139.8616, RadiusLat: 0.014, RadiusLng: 0.016, MinDB: 38, MaxDB: 58},
+	}
+
+	totalWeight := 0
+	for _, c := range clusters {
+		totalWeight += c.Weight
+	}
+
+	insertedTotal := 0
+	results := []map[string]interface{}{}
+	remaining := req.Count
+	for i, c := range clusters {
+		count := req.Count * c.Weight / totalWeight
+		if i == len(clusters)-1 {
+			count = remaining
+		}
+		remaining -= count
+		if count <= 0 {
+			continue
+		}
+
+		inserted, err := insertDebugMeasurements(DebugBulkMeasurementsRequest{
+			UserID:    req.UserID,
+			Count:     count,
+			CenterLat: c.CenterLat,
+			CenterLng: c.CenterLng,
+			RadiusLat: c.RadiusLat,
+			RadiusLng: c.RadiusLng,
+			MinDB:     c.MinDB,
+			MaxDB:     c.MaxDB,
+			Shape:     "ellipse",
+		})
+		if err != nil {
+			log.Printf("tokyo random INSERT失敗 cluster=%s: %v", c.Name, err)
+			respondError(w, http.StatusInternalServerError, "東京ランダム測定データの投入に失敗しました")
+			return
+		}
+		insertedTotal += inserted
+		results = append(results, map[string]interface{}{
+			"name":     c.Name,
+			"inserted": inserted,
+			"min_db":   c.MinDB,
+			"max_db":   c.MaxDB,
+		})
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"message":  "東京全域の測定データを一括投入しました",
+		"user_id":  req.UserID,
+		"inserted": insertedTotal,
+		"clusters": results,
 	})
 }
 
