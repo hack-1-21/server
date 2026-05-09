@@ -49,6 +49,10 @@ func main() {
 	// ---- ルート ----
 	r.HandleFunc("/routes/quiet", handlers.GetQuietRoutes).Methods("POST")
 
+	// ---- Places API プロキシ ----
+	r.HandleFunc("/places/autocomplete", handlers.AutocompletePlaces).Methods("GET")
+	r.HandleFunc("/places/details", handlers.GetPlaceDetails).Methods("GET")
+
 	// ---- 箱庭 ----
 	r.HandleFunc("/users/{user_id}/garden", handlers.GetActiveGarden).Methods("GET")
 	r.HandleFunc("/users/{user_id}/garden/history", handlers.GetGardenHistory).Methods("GET")
