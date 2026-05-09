@@ -44,6 +44,8 @@ type DebugBulkMeasurementsRequest struct {
 	CenterLng float64 `json:"center_lng"`
 	RadiusLat float64 `json:"radius_lat"`
 	RadiusLng float64 `json:"radius_lng"`
+	MinDB     float64 `json:"min_db"`
+	MaxDB     float64 `json:"max_db"`
 }
 
 // DebugBulkMeasurements POST /debug/measurements/bulk
@@ -77,8 +79,18 @@ func DebugBulkMeasurements(w http.ResponseWriter, r *http.Request) {
 	if req.RadiusLng == 0 {
 		req.RadiusLng = 0.015
 	}
+	if req.MinDB == 0 {
+		req.MinDB = 45
+	}
+	if req.MaxDB == 0 {
+		req.MaxDB = 90
+	}
 	if req.CenterLat < -90 || req.CenterLat > 90 || req.CenterLng < -180 || req.CenterLng > 180 {
 		respondError(w, http.StatusBadRequest, "center_lat または center_lng の範囲が不正です")
+		return
+	}
+	if req.MinDB < 0 || req.MaxDB > 140 || req.MinDB > req.MaxDB {
+		respondError(w, http.StatusBadRequest, "min_db / max_db の範囲が不正です")
 		return
 	}
 
@@ -102,7 +114,7 @@ func DebugBulkMeasurements(w http.ResponseWriter, r *http.Request) {
 			INSERT INTO measurements (user_id, db, hz, latitude, longitude, created_at)
 			SELECT
 				$1,
-				45 + random() * 45,
+				$7 + random() * ($8 - $7),
 				100 + random() * 4900,
 				$3 + (random() - 0.5) * 2 * $5,
 				$4 + (random() - 0.5) * 2 * $6,
@@ -117,6 +129,8 @@ func DebugBulkMeasurements(w http.ResponseWriter, r *http.Request) {
 		req.CenterLng,
 		req.RadiusLat,
 		req.RadiusLng,
+		req.MinDB,
+		req.MaxDB,
 	).Scan(&inserted)
 	if err != nil {
 		log.Printf("measurements bulk INSERT失敗: %v", err)
@@ -132,6 +146,8 @@ func DebugBulkMeasurements(w http.ResponseWriter, r *http.Request) {
 		"center_lng": req.CenterLng,
 		"radius_lat": req.RadiusLat,
 		"radius_lng": req.RadiusLng,
+		"min_db":     req.MinDB,
+		"max_db":     req.MaxDB,
 	})
 }
 
