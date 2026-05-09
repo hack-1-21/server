@@ -37,6 +37,104 @@ type DebugGenerateInitialGardenRequest struct {
 	UserID string `json:"user_id"`
 }
 
+type DebugBulkMeasurementsRequest struct {
+	UserID    string  `json:"user_id"`
+	Count     int     `json:"count"`
+	CenterLat float64 `json:"center_lat"`
+	CenterLng float64 `json:"center_lng"`
+	RadiusLat float64 `json:"radius_lat"`
+	RadiusLng float64 `json:"radius_lng"`
+}
+
+// DebugBulkMeasurements POST /debug/measurements/bulk
+// マップ表示確認用に、指定ユーザーの測定データを中心座標周辺へ一括投入する
+func DebugBulkMeasurements(w http.ResponseWriter, r *http.Request) {
+	var req DebugBulkMeasurementsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "リクエスト形式が不正です")
+		return
+	}
+	if req.UserID == "" {
+		respondError(w, http.StatusBadRequest, "user_id は必須です")
+		return
+	}
+	if req.Count <= 0 {
+		req.Count = 10000
+	}
+	if req.Count > 50000 {
+		respondError(w, http.StatusBadRequest, "count は 50000 以下で指定してください")
+		return
+	}
+	if req.CenterLat == 0 {
+		req.CenterLat = 35.6896
+	}
+	if req.CenterLng == 0 {
+		req.CenterLng = 139.7006
+	}
+	if req.RadiusLat == 0 {
+		req.RadiusLat = 0.015
+	}
+	if req.RadiusLng == 0 {
+		req.RadiusLng = 0.015
+	}
+	if req.CenterLat < -90 || req.CenterLat > 90 || req.CenterLng < -180 || req.CenterLng > 180 {
+		respondError(w, http.StatusBadRequest, "center_lat または center_lng の範囲が不正です")
+		return
+	}
+
+	var exists bool
+	if err := db.DB.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM users WHERE user_id = $1)`,
+		req.UserID,
+	).Scan(&exists); err != nil {
+		log.Printf("users EXISTS確認失敗: %v", err)
+		respondError(w, http.StatusInternalServerError, "ユーザー確認に失敗しました")
+		return
+	}
+	if !exists {
+		respondError(w, http.StatusNotFound, "指定されたユーザーが存在しません")
+		return
+	}
+
+	var inserted int
+	err := db.DB.QueryRow(
+		`WITH inserted AS (
+			INSERT INTO measurements (user_id, db, hz, latitude, longitude, created_at)
+			SELECT
+				$1,
+				45 + random() * 45,
+				100 + random() * 4900,
+				$3 + (random() - 0.5) * 2 * $5,
+				$4 + (random() - 0.5) * 2 * $6,
+				NOW() - (random() * interval '7 days')
+			FROM generate_series(1, $2)
+			RETURNING id
+		)
+		SELECT COUNT(*) FROM inserted`,
+		req.UserID,
+		req.Count,
+		req.CenterLat,
+		req.CenterLng,
+		req.RadiusLat,
+		req.RadiusLng,
+	).Scan(&inserted)
+	if err != nil {
+		log.Printf("measurements bulk INSERT失敗: %v", err)
+		respondError(w, http.StatusInternalServerError, "測定データの一括投入に失敗しました")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"message":    "測定データを一括投入しました",
+		"user_id":    req.UserID,
+		"inserted":   inserted,
+		"center_lat": req.CenterLat,
+		"center_lng": req.CenterLng,
+		"radius_lat": req.RadiusLat,
+		"radius_lng": req.RadiusLng,
+	})
+}
+
 // DebugGenerateInitialGarden POST /debug/garden/generate-initial
 // 既存ユーザーに初期箱庭がない場合は作成し、Stage 1 / Generation 1 の画像生成を明示的に実行する
 func DebugGenerateInitialGarden(w http.ResponseWriter, r *http.Request) {
