@@ -55,6 +55,7 @@ func main() {
 	r.HandleFunc("/debug/reset", handlers.ResetDatabase).Methods("DELETE")
 	r.HandleFunc("/debug/users", handlers.GetAllUsersDebug).Methods("GET")
 	r.HandleFunc("/debug/measurements/bulk", handlers.DebugBulkMeasurements).Methods("POST")
+	r.HandleFunc("/debug/measurements/delete", handlers.DebugDeleteMeasurements).Methods("POST")
 	r.HandleFunc("/debug/garden/generate-initial", handlers.DebugGenerateInitialGarden).Methods("POST")
 	r.HandleFunc("/debug/garden/add-points", handlers.DebugAddGardenPoints).Methods("POST")
 	r.HandleFunc("/debug/test-cloudflare", handlers.TestCloudflareDebug).Methods("GET")

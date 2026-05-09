@@ -46,6 +46,15 @@ type DebugBulkMeasurementsRequest struct {
 	RadiusLng float64 `json:"radius_lng"`
 	MinDB     float64 `json:"min_db"`
 	MaxDB     float64 `json:"max_db"`
+	Shape     string  `json:"shape"`
+}
+
+type DebugDeleteMeasurementsRequest struct {
+	UserID string  `json:"user_id"`
+	NELat  float64 `json:"ne_lat"`
+	NELng  float64 `json:"ne_lng"`
+	SWLat  float64 `json:"sw_lat"`
+	SWLng  float64 `json:"sw_lng"`
 }
 
 // DebugBulkMeasurements POST /debug/measurements/bulk
@@ -85,12 +94,19 @@ func DebugBulkMeasurements(w http.ResponseWriter, r *http.Request) {
 	if req.MaxDB == 0 {
 		req.MaxDB = 90
 	}
+	if req.Shape == "" {
+		req.Shape = "ellipse"
+	}
 	if req.CenterLat < -90 || req.CenterLat > 90 || req.CenterLng < -180 || req.CenterLng > 180 {
 		respondError(w, http.StatusBadRequest, "center_lat または center_lng の範囲が不正です")
 		return
 	}
 	if req.MinDB < 0 || req.MaxDB > 140 || req.MinDB > req.MaxDB {
 		respondError(w, http.StatusBadRequest, "min_db / max_db の範囲が不正です")
+		return
+	}
+	if req.Shape != "box" && req.Shape != "ellipse" {
+		respondError(w, http.StatusBadRequest, "shape は box または ellipse を指定してください")
 		return
 	}
 
@@ -109,8 +125,9 @@ func DebugBulkMeasurements(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var inserted int
-	err := db.DB.QueryRow(
-		`WITH inserted AS (
+	var insertQuery string
+	if req.Shape == "box" {
+		insertQuery = `WITH inserted AS (
 			INSERT INTO measurements (user_id, db, hz, latitude, longitude, created_at)
 			SELECT
 				$1,
@@ -122,7 +139,29 @@ func DebugBulkMeasurements(w http.ResponseWriter, r *http.Request) {
 			FROM generate_series(1, $2::integer)
 			RETURNING id
 		)
-		SELECT COUNT(*) FROM inserted`,
+		SELECT COUNT(*) FROM inserted`
+	} else {
+		insertQuery = `WITH inserted AS (
+			INSERT INTO measurements (user_id, db, hz, latitude, longitude, created_at)
+			SELECT
+				$1,
+				$7::double precision + random() * ($8::double precision - $7::double precision),
+				100 + random() * 4900,
+				$3::double precision + sin(v.theta) * v.rho * $5::double precision,
+				$4::double precision + cos(v.theta) * v.rho * $6::double precision,
+				NOW() - (random() * interval '7 days')
+			FROM generate_series(1, $2::integer)
+			CROSS JOIN LATERAL (
+				SELECT
+					random() * 6.283185307179586 AS theta,
+					sqrt(random()) * random() AS rho
+			) v
+			RETURNING id
+		)
+		SELECT COUNT(*) FROM inserted`
+	}
+	err := db.DB.QueryRow(
+		insertQuery,
 		req.UserID,
 		req.Count,
 		req.CenterLat,
@@ -148,6 +187,49 @@ func DebugBulkMeasurements(w http.ResponseWriter, r *http.Request) {
 		"radius_lng": req.RadiusLng,
 		"min_db":     req.MinDB,
 		"max_db":     req.MaxDB,
+		"shape":      req.Shape,
+	})
+}
+
+// DebugDeleteMeasurements POST /debug/measurements/delete
+// マップ表示確認用に、指定ユーザーの測定データをbbox内だけ削除する
+func DebugDeleteMeasurements(w http.ResponseWriter, r *http.Request) {
+	var req DebugDeleteMeasurementsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "リクエスト形式が不正です")
+		return
+	}
+	if req.UserID == "" {
+		respondError(w, http.StatusBadRequest, "user_id は必須です")
+		return
+	}
+	if req.SWLat > req.NELat || req.SWLng > req.NELng {
+		respondError(w, http.StatusBadRequest, "bbox の範囲が不正です")
+		return
+	}
+
+	result, err := db.DB.Exec(
+		`DELETE FROM measurements
+		 WHERE user_id = $1
+		   AND latitude >= $2 AND latitude <= $3
+		   AND longitude >= $4 AND longitude <= $5`,
+		req.UserID,
+		req.SWLat,
+		req.NELat,
+		req.SWLng,
+		req.NELng,
+	)
+	if err != nil {
+		log.Printf("measurements DELETE失敗: %v", err)
+		respondError(w, http.StatusInternalServerError, "測定データの削除に失敗しました")
+		return
+	}
+	deleted, _ := result.RowsAffected()
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "測定データを削除しました",
+		"user_id": req.UserID,
+		"deleted": deleted,
 	})
 }
 
