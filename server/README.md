@@ -50,6 +50,7 @@ server/
 | `JWT_SECRET` | JWT署名用シークレット（任意の文字列） |
 | `CF_ACCOUNT_ID` | Cloudflare アカウントID |
 | `CF_API_TOKEN` | Cloudflare Workers AI 権限付きAPIトークン |
+| `GOOGLE_MAPS_API_KEY` | Google Routes API / Maps Platform 用APIキー |
 | `STORAGE_DIR` | 画像保存先ディレクトリ（Railway Volumeにマウント: `/app/data/images`） |
 
 > **Railway Volume の設定**: Railway ダッシュボード → Volumes → New Volume → マウントパス `/app/data` に設定する。
@@ -62,6 +63,7 @@ server/
 | `JWT_SECRET` | `dev-secret` 等でOK |
 | `CF_ACCOUNT_ID` | Cloudflare アカウントID（ローカルでも画像生成をテストする場合） |
 | `CF_API_TOKEN` | Cloudflare Workers AI 権限付きAPIトークン |
+| `GOOGLE_MAPS_API_KEY` | Google Routes API をテストする場合に設定 |
 | `STORAGE_DIR` | `./data/images`（未設定時のデフォルト値） |
 
 ---
@@ -140,6 +142,12 @@ https://server-production-5adf.up.railway.app
 | `POST` | `/measurements` | WearOS から音データ投稿（箱庭ポイント加算・進化トリガー） |
 | `GET` | `/measurements` | 全件または差分取得（`?after_id=N`） |
 | `GET` | `/measurements/bbox` | マップ表示範囲内のデータ取得 |
+
+### ルート（Route）
+
+| Method | Path | 説明 |
+|--------|------|------|
+| `POST` | `/routes/quiet` | Google Routes API の徒歩ルート候補を、音量データで静音ランキング |
 
 ### デバッグ（開発・テスト用）
 

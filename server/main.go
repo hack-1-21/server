@@ -46,6 +46,9 @@ func main() {
 	r.HandleFunc("/measurements", handlers.GetMeasurements).Methods("GET")
 	r.HandleFunc("/measurements/bbox", handlers.GetMeasurementsBBox).Methods("GET")
 
+	// ---- ルート ----
+	r.HandleFunc("/routes/quiet", handlers.GetQuietRoutes).Methods("POST")
+
 	// ---- 箱庭 ----
 	r.HandleFunc("/users/{user_id}/garden", handlers.GetActiveGarden).Methods("GET")
 	r.HandleFunc("/users/{user_id}/garden/history", handlers.GetGardenHistory).Methods("GET")
