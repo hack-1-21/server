@@ -114,12 +114,12 @@ func DebugBulkMeasurements(w http.ResponseWriter, r *http.Request) {
 			INSERT INTO measurements (user_id, db, hz, latitude, longitude, created_at)
 			SELECT
 				$1,
-				$7 + random() * ($8 - $7),
+				$7::double precision + random() * ($8::double precision - $7::double precision),
 				100 + random() * 4900,
-				$3 + (random() - 0.5) * 2 * $5,
-				$4 + (random() - 0.5) * 2 * $6,
+				$3::double precision + (random() - 0.5) * 2 * $5::double precision,
+				$4::double precision + (random() - 0.5) * 2 * $6::double precision,
 				NOW() - (random() * interval '7 days')
-			FROM generate_series(1, $2)
+			FROM generate_series(1, $2::integer)
 			RETURNING id
 		)
 		SELECT COUNT(*) FROM inserted`,
