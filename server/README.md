@@ -225,15 +225,15 @@ curl -X POST https://server-production-5adf.up.railway.app/auth/google \
 
 1. WearOS が `POST /measurements` にデータを送るたびに **+1ポイント** が加算される
 2. ポイントに応じて自動的に段階（Stage）が上がり、**Cloudflare Workers AI で新しい箱庭画像が非同期生成される**
-3. 1000pt に達すると**世代交代（Generation Up）**し、前の世代は「図鑑」に保存される
+3. 300pt に達すると**世代交代（Generation Up）**し、前の世代は「図鑑」に保存される
 
 ### 段階（Stage）の定義
 
 | ポイント範囲 | Stage | 画像の世界観 |
 |---|---|---|
-| 0 〜 399 pt | Stage 1 | 小さな芽吹き・静かな霧の中 |
-| 400 〜 799 pt | Stage 2 | 成長した木・虹・温かな光 |
-| 800 〜 999 pt | Stage 3 | 古代の巨木・輝く妖精・満ち溢れる生命力 |
+| 0 〜 99 pt | Stage 1 | 小さな芽吹き・静かな霧の中 |
+| 100 〜 199 pt | Stage 2 | 成長した木・虹・温かな光 |
+| 200 〜 299 pt | Stage 3 | 古代の巨木・輝く妖精・満ち溢れる生命力 |
 
 ### 画像生成プロンプトの変更方法
 
@@ -297,7 +297,7 @@ https://server-production-5adf.up.railway.app/images/gardens/{user_id}/{user_id}
     "id": 1,
     "user_id": "user-001",
     "generation": 1,
-    "points": 1000,
+    "points": 300,
     "stage": 3,
     "image_url": "/images/gardens/user-001/user-001_gen1.png",
     "is_active": false,
@@ -346,20 +346,20 @@ curl -s https://server-production-5adf.up.railway.app/users/test-user-01/garden
 ### ステップ3: ポイントを追加して段階アップをシミュレート
 
 ```bash
-# Stage 2へ進化（400pt追加）
+# Stage 2へ進化（100pt追加）
 curl -X POST https://server-production-5adf.up.railway.app/debug/garden/add-points \
   -H "Content-Type: application/json" \
-  -d '{"user_id": "test-user-01", "points": 400}'
+  -d '{"user_id": "test-user-01", "points": 100}'
 
-# Stage 3へ進化（さらに400pt追加）
+# Stage 3へ進化（さらに100pt追加）
 curl -X POST https://server-production-5adf.up.railway.app/debug/garden/add-points \
   -H "Content-Type: application/json" \
-  -d '{"user_id": "test-user-01", "points": 400}'
+  -d '{"user_id": "test-user-01", "points": 100}'
 
-# 世代交代（さらに200pt追加 → 合計1000pt超）
+# 世代交代（さらに100pt追加 → 合計300pt到達）
 curl -X POST https://server-production-5adf.up.railway.app/debug/garden/add-points \
   -H "Content-Type: application/json" \
-  -d '{"user_id": "test-user-01", "points": 200}'
+  -d '{"user_id": "test-user-01", "points": 100}'
 ```
 
 ### ステップ4: 全ユーザーの箱庭状態を一覧確認

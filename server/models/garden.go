@@ -17,8 +17,8 @@ type Garden struct {
 
 // MeasurementResponse は POST /measurements のレスポンス
 type MeasurementResponse struct {
-	ID         int64  `json:"id"`
-	Message    string `json:"message"`
+	ID      int64  `json:"id"`
+	Message string `json:"message"`
 	// 箱庭情報
 	Points     int    `json:"points"`
 	Stage      int    `json:"stage"`
@@ -40,16 +40,17 @@ type ProfileResponse struct {
 
 // ユーザーレベル閾値（累計EXPで判定）
 // 指数関数的に必要経験値が増加していくよう設計
-//   Lv.1:    0 EXP〜
-//   Lv.2:  200 EXP〜  (Stage 1→2 で1回分)
-//   Lv.3:  500 EXP〜  (Stage 2→3 で1回分追加)
-//   Lv.4:  900 EXP〜  (世代交代1回分追加)
-//   Lv.5: 1500 EXP〜
-//   Lv.6: 2300 EXP〜
-//   Lv.7: 3400 EXP〜
-//   Lv.8: 5000 EXP〜  (いわゆる「一人前」の目安)
-//   Lv.9: 7200 EXP〜
-//   Lv.10: 10000 EXP〜 (マックス)
+//
+//	Lv.1:    0 EXP〜
+//	Lv.2:  200 EXP〜  (Stage 1→2 で1回分)
+//	Lv.3:  500 EXP〜  (Stage 2→3 で1回分追加)
+//	Lv.4:  900 EXP〜  (世代交代1回分追加)
+//	Lv.5: 1500 EXP〜
+//	Lv.6: 2300 EXP〜
+//	Lv.7: 3400 EXP〜
+//	Lv.8: 5000 EXP〜  (いわゆる「一人前」の目安)
+//	Lv.9: 7200 EXP〜
+//	Lv.10: 10000 EXP〜 (マックス)
 var UserLevelThresholds = []int{
 	0,     // Lv.1
 	200,   // Lv.2
@@ -76,9 +77,9 @@ func CalcUserLevel(totalExp int) int {
 
 // 箱庭段階閾値
 const (
-	StageThreshold2 = 400  // Stage 2 開始ポイント
-	StageThreshold3 = 800  // Stage 3 開始ポイント
-	MaxPoints       = 1000 // 世代交代ポイント
+	StageThreshold2 = 100 // Stage 2 開始ポイント
+	StageThreshold3 = 200 // Stage 3 開始ポイント
+	MaxPoints       = 300 // 世代交代ポイント
 )
 
 // EXP加算量（段階アップ時）
@@ -104,4 +105,3 @@ func CalcStage(points int) int {
 		return 1
 	}
 }
-
