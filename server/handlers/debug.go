@@ -33,6 +33,82 @@ type DebugAddGardenPointsRequest struct {
 	Points int    `json:"points"`
 }
 
+type DebugGenerateInitialGardenRequest struct {
+	UserID string `json:"user_id"`
+}
+
+// DebugGenerateInitialGarden POST /debug/garden/generate-initial
+// 既存ユーザーに初期箱庭がない場合は作成し、Stage 1 / Generation 1 の画像生成を明示的に実行する
+func DebugGenerateInitialGarden(w http.ResponseWriter, r *http.Request) {
+	var req DebugGenerateInitialGardenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "リクエスト形式が不正です")
+		return
+	}
+	if req.UserID == "" {
+		respondError(w, http.StatusBadRequest, "user_id は必須です")
+		return
+	}
+
+	var exists bool
+	if err := db.DB.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM users WHERE user_id = $1)`,
+		req.UserID,
+	).Scan(&exists); err != nil {
+		log.Printf("users EXISTS確認失敗: %v", err)
+		respondError(w, http.StatusInternalServerError, "ユーザー確認に失敗しました")
+		return
+	}
+	if !exists {
+		respondError(w, http.StatusNotFound, "指定されたユーザーが存在しません")
+		return
+	}
+
+	var gardenID int
+	err := db.DB.QueryRow(
+		`INSERT INTO gardens (user_id, generation, points, stage, is_active)
+		 SELECT $1, 1, 0, 1, TRUE
+		 WHERE NOT EXISTS (
+		   SELECT 1 FROM gardens WHERE user_id = $1 AND is_active = TRUE
+		 )
+		 RETURNING id`,
+		req.UserID,
+	).Scan(&gardenID)
+	if err == sql.ErrNoRows {
+		err = db.DB.QueryRow(
+			`SELECT id
+			 FROM gardens
+			 WHERE user_id = $1 AND is_active = TRUE
+			 ORDER BY generation DESC
+			 LIMIT 1`,
+			req.UserID,
+		).Scan(&gardenID)
+	}
+	if err != nil {
+		log.Printf("garden 取得/作成失敗: %v", err)
+		respondError(w, http.StatusInternalServerError, "箱庭の取得または作成に失敗しました")
+		return
+	}
+
+	if !isImageGenerationConfigured() {
+		respondError(w, http.StatusInternalServerError, "CF_ACCOUNT_ID または CF_API_TOKEN が環境変数に設定されていません")
+		return
+	}
+
+	GenerateAndSaveGardenImage(gardenID, 1, 1, req.UserID,
+		func(gid int, url string) {
+			if _, err := db.DB.Exec(`UPDATE gardens SET image_url = $1 WHERE id = $2 AND is_active = TRUE`, url, gid); err != nil {
+				log.Printf("gardens image_url UPDATE失敗: %v", err)
+			}
+		})
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"message":   "初期箱庭画像生成を開始しました",
+		"user_id":   req.UserID,
+		"garden_id": gardenID,
+	})
+}
+
 // DebugAddGardenPoints POST /debug/garden/add-points
 // テスト用に箱庭のポイントを強制的に追加し、進化・画像生成を確認するためのエンドポイント
 func DebugAddGardenPoints(w http.ResponseWriter, r *http.Request) {

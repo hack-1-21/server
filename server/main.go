@@ -54,6 +54,7 @@ func main() {
 	// ---- デバッグ ----
 	r.HandleFunc("/debug/reset", handlers.ResetDatabase).Methods("DELETE")
 	r.HandleFunc("/debug/users", handlers.GetAllUsersDebug).Methods("GET")
+	r.HandleFunc("/debug/garden/generate-initial", handlers.DebugGenerateInitialGarden).Methods("POST")
 	r.HandleFunc("/debug/garden/add-points", handlers.DebugAddGardenPoints).Methods("POST")
 	r.HandleFunc("/debug/test-cloudflare", handlers.TestCloudflareDebug).Methods("GET")
 	r.HandleFunc("/debug/check-cf-config", handlers.CheckCFConfigDebug).Methods("GET")
