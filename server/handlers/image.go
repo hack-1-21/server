@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -112,13 +113,11 @@ var LightStage1 = "[Light Theme, Stage 1 - Tiny Light Sprout] Front view of a tr
 var LightStage2 = "[Light Theme, Stage 2 - Thriving Tree of Life] Based on the composition of Stage 1, inside the identical glass bottle, the sprout has grown into a beautiful medium-sized Tree of Life with glowing gold leaves. Many brilliant light orbs float around, a beautiful celestial maiden (Tennyo) with a floating transparent robe stands gracefully, a white unicorn rests on the white grass, floating temple in the far background. Richer details, cozy game art, no text."
 var LightStage3 = "[Light Theme, Stage 3 - Colossal Holy Majesty] Based on the composition of Stage 2, inside the identical glass bottle, the tree has evolved into an overwhelmingly giant World Tree radiating blinding gold light. Thousands of intense floating golden orbs illuminate the scene. A supreme celestial maiden with an enormous, incredibly intricate transparent lace robe gracefully envelops the scene. Multiple flying angels with brilliant halos flutter, a magnificent pegasus soars. A flawless, pure white floating temple shines with a brilliant holy protective barrier. Thousands of sparkling holy stars and golden light rays fill the bottle, ultra-luxurious, cozy game art, no text."
 
-func buildPrompt(stage, generation int) string {
-	// 4つの属性（草・炎・水・光）を世代(generation)ごとにトグル・ループさせます
-	// Gen 1 -> 草, Gen 2 -> 炎, Gen 3 -> 水, Gen 4 -> 光, Gen 5 -> 草 ...
-	attributeIndex := (generation - 1) % 4
-	if attributeIndex < 0 {
-		attributeIndex = 0
-	}
+func buildPrompt(stage, generation, gardenID int) string {
+	// 属性を完全ランダム化（ただし同一の箱庭IDに対しては一貫性を持たせるためgardenIDをシード値とする）
+	// これにより、各箱庭が誕生した瞬間にランダムに属性が決まり、進化後も維持されます。
+	r := rand.New(rand.NewSource(int64(gardenID)))
+	attributeIndex := r.Intn(4)
 
 	var stagePrompt string
 	switch attributeIndex {
@@ -364,7 +363,7 @@ func GenerateAndSaveGardenImage(gardenID, stage, generation int, userID string, 
 		// 処理完了後（成功・失敗問わず）に実行中ステータスを解除する
 		defer activeGenerations.Delete(gardenID)
 
-		prompt := buildPrompt(stage, generation)
+		prompt := buildPrompt(stage, generation, gardenID)
 		log.Printf("[画像生成] gardenID=%d stage=%d generation=%d prompt=%s", gardenID, stage, generation, prompt[:50])
 
 		// 429 レートリミット対策の自動リトライロジック
