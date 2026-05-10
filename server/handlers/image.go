@@ -144,11 +144,11 @@ func buildPrompt(stage, generation int) string {
 }
 
 // ==========================================
-// Cloudflare Workers AI 呼び出し (ハイブリッド i2i 対応)
+// Google Gemini API 呼び出し (ハイブリッド i2i 対応)
 // ==========================================
 
-// 引数に userID と stage を用いて、Stage 1ではSDXL（Text-to-Image）、
-// Stage 2以上ではSD1.5-img2imgを用いた画像ベースの進化（Image-to-Image）を実行します。
+// 引数に userID と stage を用いて、Stage 1ではテキストプロンプトのみ、
+// Stage 2以上では既存画像も入力に含めたマルチモーダル（Image-to-Image）生成を実行します。
 func generateGardenImage(prompt string, userID string, stage int) ([]byte, error) {
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
@@ -314,7 +314,7 @@ func GenerateAndSaveGardenImage(gardenID, stage, generation int, userID string, 
 		// 関数シグネチャの変更に伴い、userID と stage を渡すように修正
 		imgData, err := generateGardenImage(prompt, userID, stage)
 		if err != nil {
-			log.Printf("[画像生成] Cloudflare API エラー: %v", err)
+			log.Printf("[画像生成] Gemini API エラー: %v", err)
 			return
 		}
 
@@ -329,7 +329,7 @@ func GenerateAndSaveGardenImage(gardenID, stage, generation int, userID string, 
 	}()
 }
 
-// isImageGenerationConfigured は Cloudflare Workers AI の設定が揃っているか確認する
+// isImageGenerationConfigured は Gemini API の設定が揃っているか確認する
 func isImageGenerationConfigured() bool {
-	return os.Getenv("CF_ACCOUNT_ID") != "" && os.Getenv("CF_API_TOKEN") != ""
+	return os.Getenv("GEMINI_API_KEY") != ""
 }
