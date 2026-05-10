@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 )
 
 // ResetDatabase DELETE /debug/reset
@@ -420,7 +422,7 @@ func DebugGenerateInitialGarden(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !isImageGenerationConfigured() {
-		respondError(w, http.StatusInternalServerError, "CF_ACCOUNT_ID または CF_API_TOKEN が環境変数に設定されていません")
+		respondError(w, http.StatusInternalServerError, "GEMINI_API_KEY が環境変数に設定されていません")
 		return
 	}
 
@@ -595,36 +597,50 @@ func GetAllUsersDebug(w http.ResponseWriter, r *http.Request) {
 }
 
 // TestCloudflareDebug GET /debug/test-cloudflare
-// Cloudflare Workers AI を同期的に呼び出してエラー詳細をブラウザに返すテスト用API
+// Gemini API を同期的に呼び出して動作確認するテスト用API（レートリミット時の簡易リトライ付き）
 func TestCloudflareDebug(w http.ResponseWriter, r *http.Request) {
 	if !isImageGenerationConfigured() {
-		respondError(w, http.StatusInternalServerError, "CF_ACCOUNT_ID または CF_API_TOKEN が環境変数に設定されていません")
+		respondError(w, http.StatusInternalServerError, "GEMINI_API_KEY が環境変数に設定されていません")
 		return
 	}
 
-	// 第2引数: userID (デバッグ用ダミー), 第3引数: stage=1 (i2iを使用せずtxt2imgでテスト)
-	imgData, err := generateGardenImage("a tiny rabbit in a beautiful magical garden, photorealistic", "debug-test-user", 1)
+	var imgData []byte
+	var err error
+	// デバッグ用なので試行回数は控えめ（計3回）
+	maxRetries := 2 
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// 第2引数: userID (デバッグ用ダミー), 第3引数: stage=1
+		imgData, err = generateGardenImage("a tiny rabbit in a beautiful magical garden, high quality anime style", "debug-test-user", 1)
+		if err == nil {
+			break
+		}
+		if strings.Contains(err.Error(), "429") && attempt < maxRetries {
+			log.Printf("[デバッグAPI] 429検知: 3秒待機してリトライします (%d/%d)", attempt+1, maxRetries)
+			time.Sleep(3 * time.Second)
+			continue
+		}
+		break
+	}
+
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Cloudflare API エラー: %v", err))
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("Gemini API エラー: %v", err))
 		return
 	}
 
 	respondJSON(w, http.StatusOK, map[string]string{
-		"message": "Cloudflare Workers AI は正常に動作しています！",
+		"message": "Gemini API (v1beta) は正常に動作しています！",
 		"size":    fmt.Sprintf("%d bytes", len(imgData)),
 	})
 }
 
 // CheckCFConfigDebug GET /debug/check-cf-config
-// CF_ACCOUNT_ID と CF_API_TOKEN が設定されているか確認する
+// GEMINI_API_KEY が設定されているか確認する
 func CheckCFConfigDebug(w http.ResponseWriter, r *http.Request) {
-	accountID := os.Getenv("CF_ACCOUNT_ID")
-	apiToken := os.Getenv("CF_API_TOKEN")
+	apiKey := os.Getenv("GEMINI_API_KEY")
 
 	result := map[string]bool{
-		"CF_ACCOUNT_ID_set": accountID != "",
-		"CF_API_TOKEN_set":  apiToken != "",
-		"configured":        accountID != "" && apiToken != "",
+		"GEMINI_API_KEY_set": apiKey != "",
+		"configured":        apiKey != "",
 	}
 	respondJSON(w, http.StatusOK, result)
 }
