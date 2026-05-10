@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +12,45 @@ import (
 	"path/filepath"
 	"time"
 )
+
+// Gemini API (generateContent) 用のリクエスト構造体
+type GeminiRequest struct {
+	Contents         []Content        `json:"contents"`
+	GenerationConfig GenerationConfig `json:"generationConfig"`
+}
+
+type Content struct {
+	Role  string `json:"role"`
+	Parts []Part `json:"parts"`
+}
+
+type Part struct {
+	Text       string      `json:"text,omitempty"`
+	InlineData *InlineData `json:"inlineData,omitempty"`
+}
+
+type InlineData struct {
+	MimeType string `json:"mimeType"`
+	Data     string `json:"data"` // Base64文字列
+}
+
+type GenerationConfig struct {
+	ResponseModalities []string `json:"responseModalities"`
+}
+
+// レスポンス構造体
+type GeminiResponse struct {
+	Candidates []struct {
+		Content struct {
+			Parts []struct {
+				InlineData *InlineData `json:"inlineData,omitempty"`
+			} `json:"parts"`
+		} `json:"content"`
+	} `json:"candidates"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error,omitempty"`
+}
 
 // ==========================================================================
 // 1. 各属性ごとの進化プロンプト設定 (★英語プロンプトを直接コピペ・カスタマイズできるエリア★)
@@ -110,18 +150,24 @@ func buildPrompt(stage, generation int) string {
 // 引数に userID と stage を用いて、Stage 1ではSDXL（Text-to-Image）、
 // Stage 2以上ではSD1.5-img2imgを用いた画像ベースの進化（Image-to-Image）を実行します。
 func generateGardenImage(prompt string, userID string, stage int) ([]byte, error) {
-	accountID := os.Getenv("CF_ACCOUNT_ID")
-	apiToken := os.Getenv("CF_API_TOKEN")
-
-	if accountID == "" || apiToken == "" {
-		return nil, fmt.Errorf("CF_ACCOUNT_ID または CF_API_TOKEN が環境変数に設定されていません。Cloudflareのキーを登録してください。")
+	apiKey := os.Getenv("GEMINI_API_KEY")
+	if apiKey == "" {
+		return nil, fmt.Errorf("GEMINI_API_KEY が設定されていません")
 	}
 
-	var endpoint string
-	var reqData map[string]interface{}
+	// 無料枠（1日500リクエスト）が適用される gemini-2.5-flash-image エンドポイント
+	endpoint := fmt.Sprintf(
+		"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=%s",
+		apiKey,
+	)
+
+	parts := []Part{
+		{Text: prompt},
+	}
+
 	isImg2Img := false
 
-	// Stage 2 以上なら、現在アクティブな画像を読み込んでベースにし、Cloudflareの img2img 専用モデルを呼び出す
+	// Stage 2以上: ローカルから既存画像を読み込み、Image-to-Image の入力として追加
 	if stage > 1 {
 		dataDir := os.Getenv("STORAGE_DIR")
 		if dataDir == "" {
@@ -131,42 +177,35 @@ func generateGardenImage(prompt string, userID string, stage int) ([]byte, error
 
 		imgBytes, err := os.ReadFile(activeFilePath)
 		if err == nil {
-			// Cloudflare SD-1.5-img2imgは、画像データをuint8配列（数値配列）として受け取ります
-			imgInts := make([]int, len(imgBytes))
-			for i, b := range imgBytes {
-				imgInts[i] = int(b)
-			}
-
-			endpoint = fmt.Sprintf(
-				"https://api.cloudflare.com/client/v4/accounts/%s/ai/run/@cf/runwayml/stable-diffusion-v1-5-img2img",
-				accountID,
-			)
-			reqData = map[string]interface{}{
-				"prompt":   prompt,
-				"image":    imgInts,
-				"strength": 0.60, // 元画像（ボトルの構図など）をどの程度残すか（0.0〜1.0）
-				"width":    1024,
-				"height":   1024,
-			}
+			imgBase64 := base64.StdEncoding.EncodeToString(imgBytes)
+			parts = append(parts, Part{
+				InlineData: &InlineData{
+					MimeType: "image/png",
+					Data:     imgBase64,
+				},
+			})
 			isImg2Img = true
-			log.Printf("[Cloudflare i2i] 前の画像をベースにSD1.5-img2img（1024x1024）で生成します (strength: 0.65)")
+			log.Printf("[Gemini i2i] 既存画像をベースに生成します")
 		} else {
-			log.Printf("[Cloudflare i2i] 前の画像が見つからないため、新規(SDXL txt2img)で生成します: %v", err)
+			log.Printf("[Gemini txt2img] 既存画像が見つからないため新規生成します: %v", err)
 		}
 	}
 
 	if !isImg2Img {
-		// Stage 1 または初回生成時は、高性能な SD-XL を使って高品質な初期画像を生成
-		endpoint = fmt.Sprintf(
-			"https://api.cloudflare.com/client/v4/accounts/%s/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0",
-			accountID,
-		)
-		reqData = map[string]interface{}{
-			"prompt": prompt,
-			"width":  1024,
-			"height": 1024,
-		}
-		log.Printf("[Cloudflare txt2img] SDXLで新規画像を生成します")
+		log.Printf("[Gemini txt2img] 新規画像を生成します")
+	}
+
+	reqData := GeminiRequest{
+		Contents: []Content{
+			{
+				Role:  "user",
+				Parts: parts,
+			},
+		},
+		GenerationConfig: GenerationConfig{
+			// 画像出力を明示的に要求
+			ResponseModalities: []string{"IMAGE"},
+		},
 	}
 
 	reqBodyBytes, err := json.Marshal(reqData)
@@ -178,41 +217,42 @@ func generateGardenImage(prompt string, userID string, stage int) ([]byte, error
 	if err != nil {
 		return nil, fmt.Errorf("リクエスト生成失敗: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+apiToken)
 	req.Header.Set("Content-Type", "application/json")
 
-	// 画像データ送信・受信のためタイムアウトを長めに設定
+	// 画像生成のレイテンシを考慮しタイムアウトを長めに設定
 	client := &http.Client{Timeout: 180 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Cloudflare API 呼び出し失敗: %w", err)
+		return nil, fmt.Errorf("API通信エラー: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// 429: レートリミット
+	body, _ := io.ReadAll(resp.Body)
+
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return nil, fmt.Errorf("Cloudflare API レートリミット超過 (429): しばらく待ってから再試行してください")
+		return nil, fmt.Errorf("レートリミット超過 (429): しばらく待って再試行してください")
 	}
-
-	// 認証エラー
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Cloudflare API 認証エラー (%d): %s", resp.StatusCode, string(body))
-	}
-
-	// その他エラー
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Cloudflare API エラー %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("APIエラー %d: %s", resp.StatusCode, string(body))
 	}
 
-	// 生成されたバイナリ（PNG）をそのまま読み出す
-	imgData, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("レスポンス読み込み失敗: %w", err)
+	var apiResp GeminiResponse
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return nil, fmt.Errorf("JSONパース失敗: %w, body: %s", err, string(body))
 	}
-	if len(imgData) == 0 {
-		return nil, fmt.Errorf("画像が生成されませんでした（レスポンスが空）")
+
+	if apiResp.Error != nil {
+		return nil, fmt.Errorf("API内部エラー: %s", apiResp.Error.Message)
+	}
+
+	if len(apiResp.Candidates) == 0 || len(apiResp.Candidates[0].Content.Parts) == 0 || apiResp.Candidates[0].Content.Parts[0].InlineData == nil {
+		return nil, fmt.Errorf("画像データが返却されませんでした")
+	}
+
+	// 取得したBase64データをバイナリにデコード
+	imgData, err := base64.StdEncoding.DecodeString(apiResp.Candidates[0].Content.Parts[0].InlineData.Data)
+	if err != nil {
+		return nil, fmt.Errorf("Base64デコード失敗: %w", err)
 	}
 
 	return imgData, nil
