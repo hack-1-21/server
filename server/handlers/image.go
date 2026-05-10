@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -324,10 +325,30 @@ func GenerateAndSaveGardenImage(gardenID, stage, generation int, userID string, 
 		prompt := buildPrompt(stage, generation)
 		log.Printf("[画像生成] gardenID=%d stage=%d generation=%d prompt=%s", gardenID, stage, generation, prompt[:50])
 
-		// 関数シグネチャの変更に伴い、userID と stage を渡すように修正
-		imgData, err := generateGardenImage(prompt, userID, stage)
-		if err != nil {
-			log.Printf("[画像生成] Gemini API エラー: %v", err)
+		// 429 レートリミット対策の自動リトライロジック
+		var imgData []byte
+		var err error
+		maxRetries := 4 // 初期試行を含めて最大5回挑戦
+		for attempt := 0; attempt <= maxRetries; attempt++ {
+			imgData, err = generateGardenImage(prompt, userID, stage)
+			if err == nil {
+				break // 成功したらループ脱出
+			}
+
+			// エラーが「429 レートリミット超過」の場合のみ待機リトライを行う
+			if strings.Contains(err.Error(), "429") {
+				if attempt < maxRetries {
+					// 待機時間を段階的に増やす（5秒, 10秒, 15秒, 20秒）
+					waitTime := time.Duration(5*(attempt+1)) * time.Second
+					log.Printf("[画像生成] 警告: 429レートリミットを検知。%d秒後にリトライします (試行 %d/%d)", int(waitTime.Seconds()), attempt+1, maxRetries)
+					time.Sleep(waitTime)
+					continue
+				}
+				log.Printf("[画像生成] エラー: リトライ上限に達しました")
+			}
+
+			// その他の致命的エラー、または上限到達後の429エラー
+			log.Printf("[画像生成] 生成失敗: %v", err)
 			return
 		}
 
