@@ -1,7 +1,7 @@
 package handlers
-
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -13,7 +13,34 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/oauth2/google"
 )
+
+// getGCPToken は環境変数（GCP_CREDENTIALS_JSON または GOOGLE_APPLICATION_CREDENTIALSファイル）
+// からサービスアカウント情報を読み取り、Vertex AI API呼び出し用のOAuth2アクセストークンを取得します。
+func getGCPToken(ctx context.Context) (string, error) {
+	scopes := []string{"https://www.googleapis.com/auth/cloud-platform"}
+	var creds *google.Credentials
+	var err error
+
+	jsonContent := os.Getenv("GCP_CREDENTIALS_JSON")
+	if jsonContent != "" {
+		creds, err = google.CredentialsFromJSON(ctx, []byte(jsonContent), scopes...)
+	} else {
+		creds, err = google.FindDefaultCredentials(ctx, scopes...)
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("GCP認証情報の取得失敗 (GCP_CREDENTIALS_JSON または GOOGLE_APPLICATION_CREDENTIALS を確認してください): %w", err)
+	}
+
+	token, err := creds.TokenSource.Token()
+	if err != nil {
+		return "", fmt.Errorf("アクセストークンの取得失敗: %w", err)
+	}
+	return token.AccessToken, nil
+}
 
 // Gemini API (generateContent) 用のリクエスト構造体
 type GeminiRequest struct {
@@ -150,17 +177,30 @@ func buildPrompt(stage, generation int) string {
 // ==========================================
 
 // 引数に userID と stage を用いて、Stage 1ではテキストプロンプトのみ、
-// Stage 2以上では既存画像も入力に含めたマルチモーダル（Image-to-Image）生成を実行します。
+// Stage 2以上では既存画像も入力に含めたマルチモーダル（Image-to-Image）生成を Vertex AI で実行します。
 func generateGardenImage(prompt string, userID string, stage int) ([]byte, error) {
-	apiKey := os.Getenv("GEMINI_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("GEMINI_API_KEY が設定されていません")
+	projectID := os.Getenv("GCP_PROJECT_ID")
+	location := os.Getenv("GCP_LOCATION")
+	if location == "" {
+		location = "us-central1" // デフォルトリージョン
 	}
 
-	// 無料枠（1日500リクエスト）が適用される gemini-2.5-flash-image エンドポイント
+	if projectID == "" {
+		return nil, fmt.Errorf("GCP_PROJECT_ID が設定されていません")
+	}
+
+	ctx := context.Background()
+	accessToken, err := getGCPToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("認証トークン取得失敗: %w", err)
+	}
+
+	// GCPクレジットを消費する Vertex AI (v1) のエンドポイント
 	endpoint := fmt.Sprintf(
-		"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=%s",
-		apiKey,
+		"https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/gemini-2.5-flash-image:generateContent",
+		location,
+		projectID,
+		location,
 	)
 
 	parts := []Part{
@@ -220,6 +260,8 @@ func generateGardenImage(prompt string, userID string, stage int) ([]byte, error
 		return nil, fmt.Errorf("リクエスト生成失敗: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// Vertex AI 認証用トークンを付与
+	req.Header.Set("Authorization", "Bearer "+accessToken)
 
 	// 画像生成のレイテンシを考慮しタイムアウトを長めに設定
 	client := &http.Client{Timeout: 180 * time.Second}
@@ -363,7 +405,10 @@ func GenerateAndSaveGardenImage(gardenID, stage, generation int, userID string, 
 	}()
 }
 
-// isImageGenerationConfigured は Gemini API の設定が揃っているか確認する
+// isImageGenerationConfigured は Vertex AI の設定が揃っているか確認する
 func isImageGenerationConfigured() bool {
-	return os.Getenv("GEMINI_API_KEY") != ""
+	// プロジェクトIDがあり、かつ認証情報（JSON文字列 または ファイルパス）のどちらかがあればOKとする
+	hasProject := os.Getenv("GCP_PROJECT_ID") != ""
+	hasCreds := os.Getenv("GCP_CREDENTIALS_JSON") != "" || os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") != ""
+	return hasProject && hasCreds
 }

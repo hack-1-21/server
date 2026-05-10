@@ -422,7 +422,7 @@ func DebugGenerateInitialGarden(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !isImageGenerationConfigured() {
-		respondError(w, http.StatusInternalServerError, "GEMINI_API_KEY が環境変数に設定されていません")
+		respondError(w, http.StatusInternalServerError, "GCP_PROJECT_ID または認証情報(GCP_CREDENTIALS_JSON等)が環境変数に設定されていません")
 		return
 	}
 
@@ -600,7 +600,7 @@ func GetAllUsersDebug(w http.ResponseWriter, r *http.Request) {
 // Gemini API を同期的に呼び出して動作確認するテスト用API（レートリミット時の簡易リトライ付き）
 func TestCloudflareDebug(w http.ResponseWriter, r *http.Request) {
 	if !isImageGenerationConfigured() {
-		respondError(w, http.StatusInternalServerError, "GEMINI_API_KEY が環境変数に設定されていません")
+		respondError(w, http.StatusInternalServerError, "GCP_PROJECT_ID または認証情報(GCP_CREDENTIALS_JSON等)が環境変数に設定されていません")
 		return
 	}
 
@@ -628,19 +628,22 @@ func TestCloudflareDebug(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, map[string]string{
-		"message": "Gemini API (v1beta) は正常に動作しています！",
+		"message": "Gemini on Vertex AI は正常に動作しています！",
 		"size":    fmt.Sprintf("%d bytes", len(imgData)),
 	})
 }
 
 // CheckCFConfigDebug GET /debug/check-cf-config
-// GEMINI_API_KEY が設定されているか確認する
+// Vertex AI 用の設定が揃っているか確認する
 func CheckCFConfigDebug(w http.ResponseWriter, r *http.Request) {
-	apiKey := os.Getenv("GEMINI_API_KEY")
+	projectID := os.Getenv("GCP_PROJECT_ID")
+	hasCreds := os.Getenv("GCP_CREDENTIALS_JSON") != "" || os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") != ""
 
-	result := map[string]bool{
-		"GEMINI_API_KEY_set": apiKey != "",
-		"configured":        apiKey != "",
+	result := map[string]interface{}{
+		"GCP_PROJECT_ID":          projectID,
+		"GCP_PROJECT_ID_set":      projectID != "",
+		"GCP_CREDENTIALS_exists": hasCreds,
+		"configured":             projectID != "" && hasCreds,
 	}
 	respondJSON(w, http.StatusOK, result)
 }
