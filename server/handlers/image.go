@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -304,10 +305,22 @@ func saveToLocalFile(imgData []byte, userID string, generation, stage int) (stri
 // 非同期画像生成・保存メイン関数
 // ===========================
 
+// 同一gardenIDに対する画像生成ジョブの重複実行を防止するスレッドセーフなキャッシュ
+var activeGenerations sync.Map
+
 // GenerateAndSaveGardenImage は非同期（goroutine）で呼び出す
 // 生成完了後に gardens テーブルの image_url を更新する
 func GenerateAndSaveGardenImage(gardenID, stage, generation int, userID string, updateImageURL func(gardenID int, imageURL string)) {
+	// 既に同じgardenIDで生成中の場合は、重複リクエストとして無視する
+	if _, loaded := activeGenerations.LoadOrStore(gardenID, true); loaded {
+		log.Printf("[画像生成] キャンセル: gardenID=%d の画像生成は既に実行中です。", gardenID)
+		return
+	}
+
 	go func() {
+		// 処理完了後（成功・失敗問わず）に実行中ステータスを解除する
+		defer activeGenerations.Delete(gardenID)
+
 		prompt := buildPrompt(stage, generation)
 		log.Printf("[画像生成] gardenID=%d stage=%d generation=%d prompt=%s", gardenID, stage, generation, prompt[:50])
 
